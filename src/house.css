@@ -96,6 +96,12 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 
 /* ---------- panele ---------- */
 .panel{border-radius:18px;padding:13px 16px;overflow:hidden}
+.outer.fit aside:has(.side-entities){overflow-y:auto}
+.outer.fit aside:has(.side-entities)>.panel{flex-shrink:0}
+.outer.fit aside:has(.side-entities)>.status,.outer.fit aside:has(.side-entities)>.energy{flex:1 0 auto}
+.side-entity{display:flex;align-items:center;gap:8px;width:100%;min-height:42px;padding:4px 0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.side-entity span{flex:1;overflow-wrap:anywhere}
+.side-entity strong{max-width:55%;overflow-wrap:anywhere;text-align:right}
 .p-title{display:flex;align-items:center;gap:9px;font-size:18px;font-weight:600;margin-bottom:6px}
 .t-ic{--mdc-icon-size:22px}
 .dim{color:var(--dim);font-size:14px;font-weight:400}
@@ -269,7 +275,6 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 .scene:active{transform:translateY(0) scale(.97)}
 .scene.active{background:linear-gradient(180deg,rgba(59,130,246,.5),rgba(29,78,216,.2));border:1.5px solid #3b82f6;box-shadow:0 0 22px rgba(59,130,246,.6),inset 0 0 16px rgba(59,130,246,.3),inset 0 1px 0 rgba(255,255,255,.3)}
 .sc-name{font-size:15.5px;font-weight:600}.sc-sub{font-size:12px;color:var(--dim)}
-.scene.plus{width:70px;height:70px}.scene.plus ha-icon{--mdc-icon-size:30px;margin:0}
 
 /* ---------- animacje ---------- */
 .rise{animation:rise .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--d,0) * 90ms)}

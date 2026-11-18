@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 – House dashboard fixes
+
+- Render the house card once on startup instead of twice.
+- Add entity rows to either side of the house with `side_panels.left` and `side_panels.right`. Selecting a row opens the entity details.
+- Label the admin shortcut “Create HA script” and explain how to add scene buttons through the card configuration.
+
 ## 0.4.0 – Cat corner
 
 ### New

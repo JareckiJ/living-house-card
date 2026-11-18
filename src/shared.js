@@ -28,7 +28,9 @@ const LHC_I18N = {
   en: {
     floor_up: "Floor up", floor_down: "Floor down",
     nav_home: "Home", nav_rooms: "Rooms", nav_energy: "Energy",
-    search: "Search", settings: "Settings", add_scene: "Add scene",
+    search: "Search", settings: "Settings",
+    create_script: "Create HA script",
+    create_script_help: "Open the Home Assistant script editor. To add a button here, configure scenes on this card.",
     dn_auto: "Day/night: automatic", dn_day: "Forced day", dn_night: "Forced night",
     status_title: "Home status", all_ok: "All good", alarm_bang: "Alarm!",
     offline: (n) => `${n} ${n === 1 ? "device" : "devices"} offline`,
@@ -103,7 +105,9 @@ const LHC_I18N = {
   pl: {
     floor_up: "Piętro wyżej", floor_down: "Piętro niżej",
     nav_home: "Dom", nav_rooms: "Pomieszczenia", nav_energy: "Energia",
-    search: "Szukaj", settings: "Ustawienia", add_scene: "Dodaj scenę",
+    search: "Szukaj", settings: "Ustawienia",
+    create_script: "Utwórz skrypt HA",
+    create_script_help: "Otwiera edytor skryptów Home Assistanta. Aby dodać tutaj przycisk, skonfiguruj scenes w karcie.",
     dn_auto: "Dzień/noc: automatycznie", dn_day: "Wymuszony dzień", dn_night: "Wymuszona noc",
     status_title: "Status domu", all_ok: "Wszystko OK", alarm_bang: "Alarm!",
     offline: (n) => `${n} ${lhcPlPlural(n, "urządzenie", "urządzenia", "urządzeń")} offline`,

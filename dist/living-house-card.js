@@ -1,8 +1,8 @@
-/*! Living House Card v0.4.0 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.4.1 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.4.0";
+const LHC_VERSION = "0.4.1";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -31,7 +31,9 @@ const LHC_I18N = {
   en: {
     floor_up: "Floor up", floor_down: "Floor down",
     nav_home: "Home", nav_rooms: "Rooms", nav_energy: "Energy",
-    search: "Search", settings: "Settings", add_scene: "Add scene",
+    search: "Search", settings: "Settings",
+    create_script: "Create HA script",
+    create_script_help: "Open the Home Assistant script editor. To add a button here, configure scenes on this card.",
     dn_auto: "Day/night: automatic", dn_day: "Forced day", dn_night: "Forced night",
     status_title: "Home status", all_ok: "All good", alarm_bang: "Alarm!",
     offline: (n) => `${n} ${n === 1 ? "device" : "devices"} offline`,
@@ -106,7 +108,9 @@ const LHC_I18N = {
   pl: {
     floor_up: "Piętro wyżej", floor_down: "Piętro niżej",
     nav_home: "Dom", nav_rooms: "Pomieszczenia", nav_energy: "Energia",
-    search: "Szukaj", settings: "Ustawienia", add_scene: "Dodaj scenę",
+    search: "Szukaj", settings: "Ustawienia",
+    create_script: "Utwórz skrypt HA",
+    create_script_help: "Otwiera edytor skryptów Home Assistanta. Aby dodać tutaj przycisk, skonfiguruj scenes w karcie.",
     dn_auto: "Dzień/noc: automatycznie", dn_day: "Wymuszony dzień", dn_night: "Wymuszona noc",
     status_title: "Status domu", all_ok: "Wszystko OK", alarm_bang: "Alarm!",
     offline: (n) => `${n} ${lhcPlPlural(n, "urządzenie", "urządzenia", "urządzeń")} offline`,
@@ -350,6 +354,7 @@ const LHC_DEFAULTS = {
   nav: null,
   rooms_page: null,
   scenes: [],
+  side_panels: {},
   rooms: [],
   fit: true,
   scroll_floors: "auto", // tall houses: show bigger + ▲▼ floor arrows (auto | true | false)
@@ -443,6 +448,12 @@ class LivingHouseCard extends HTMLElement {
     this._allLights = lhcUniq(Object.values(lights).flat());
     this._heatingList = lhcArr(c.heating).map((h) => (typeof h === "string" ? { entity: h } : h)).filter((h) => h.entity);
     this._scenes = lhcArr(c.scenes).map((s, i) => ({ id: s.id || `scene${i + 1}`, ...s }));
+    this._sideEntities = {};
+    for (const side of ["left", "right"]) {
+      this._sideEntities[side] = lhcArr(c.side_panels?.[side])
+        .map((item) => typeof item === "string" ? { entity: item } : item)
+        .filter((item) => typeof item?.entity === "string" && item.entity.includes("."));
+    }
     const e = c.energy || {};
     this._energy = typeof e === "string" ? { power: e } : e;
   }
@@ -493,13 +504,13 @@ class LivingHouseCard extends HTMLElement {
     const old = this._hass;
     this._hass = hass;
     const lang = lhcLang(hass, this._cfg);
-    if (lang !== this._lang) {
+    const langChanged = lang !== this._lang;
+    if (langChanged) {
       this._lang = lang;
       if (this._raw && this._raw.preset) { this._cfg = lhcApplyPreset(this._raw, lang); this._normalize(); this._trackedList = null; }
-      if (this._root) this._build();
     }
-    if (!this._root) this._build();
-    if (!old || this._changed(old, hass)) this._update();
+    if (!this._root || langChanged) this._build();
+    else if (!old || this._changed(old, hass)) this._update();
     const now = Date.now();
     if (this._energy.power && (!this._histAt || now - this._histAt > 5 * 60 * 1000)) {
       this._histAt = now;
@@ -514,6 +525,7 @@ class LivingHouseCard extends HTMLElement {
     const pr = c.printer || {};
     const ids = new Set([pr.status, pr.progress, pr.remaining, c.weather, c.weather_fallback_temperature, c.sun, c.alarm, c.ventilation, c.purifier, c.pm25, e.power, e.today, e.cost, c.main_thermostat, ...this._allLights]);
     this._heatingList.forEach((h) => ids.add(h.entity));
+    Object.values(this._sideEntities).flat().forEach(({ entity }) => ids.add(entity));
     this._rooms.forEach((r) => {
       [r.temp, r.hum, r.humExtra, r.climateTemp, r.presence, ...(r.heat || []), ...((r.tv && r.tv.ids) || [])].forEach((x) => x && ids.add(x));
       (r.entities || []).forEach((x) => ids.add(x[0]));
@@ -665,6 +677,7 @@ class LivingHouseCard extends HTMLElement {
           <aside class="left">
             ${c.weather ? `<section class="panel glass weather rise" style="--d:1" id="weather" data-more="${lhcEsc(c.weather)}"></section>` : ""}
             <section class="panel glass status rise" style="--d:2" id="status"></section>
+            ${this._sidePanel("left")}
           </aside>
 
           <main class="stage" id="stage">
@@ -693,6 +706,7 @@ class LivingHouseCard extends HTMLElement {
             ${this._heatingList.length ? `<section class="panel glass heat rise" style="--d:1" id="heat"></section>` : ""}
             ${c.purifier || c.pm25 ? `<section class="panel glass air rise" style="--d:2" id="air"></section>` : ""}
             ${this._energy.power ? `<section class="panel glass energy rise" style="--d:3" id="energy" data-more="${lhcEsc(this._energy.power)}"></section>` : ""}
+            ${this._sidePanel("right")}
           </aside>
 
           <footer class="scenes rise" style="--d:3" id="scenes"></footer>
@@ -796,8 +810,36 @@ class LivingHouseCard extends HTMLElement {
     this._renderHeat();
     this._renderAir();
     this._renderEnergy();
+    this._renderSidePanels();
     this._renderHouse();
     if (this._room) this._renderPop();
+  }
+
+  _sidePanel(side) {
+    return this._sideEntities[side].length
+      ? `<section class="panel glass side-entities" id="entities-${side}"></section>`
+      : "";
+  }
+
+  _renderSidePanels() {
+    Object.entries(this._sideEntities).forEach(([side, items]) => {
+      const el = this._el(`entities-${side}`);
+      if (!el) return;
+      const html = items.map(({ entity, name, icon }) => {
+        const state = this._s(entity);
+        const value = this._hass.formatEntityState
+          ? (state ? this._hass.formatEntityState(state) : "—")
+          : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
+        return `<button type="button" class="side-entity" data-more="${lhcEsc(entity)}">
+          ${this._icon(lhcEsc(icon || state?.attributes.icon || "mdi:information-outline"))}
+          <span>${lhcEsc(this._name(entity, name))}</span><strong>${lhcEsc(value)}</strong>
+        </button>`;
+      }).join("");
+      if (html !== el._lhcHtml) {
+        el.innerHTML = html;
+        el._lhcHtml = html;
+      }
+    });
   }
 
   _weather() {
@@ -1020,7 +1062,7 @@ class LivingHouseCard extends HTMLElement {
       <button class="scene glass ${this._scene === s.id ? "active" : ""}" data-scene="${lhcEsc(s.id)}">
         ${this._icon(s.icon || "mdi:palette-outline", `style="color:${lhcEsc(s.color || "#c7d2fe")}"`)}
         <div class="sc-name">${lhcEsc(s.name || s.id)}</div>${s.sub ? `<div class="sc-sub">${lhcEsc(s.sub)}</div>` : ""}
-      </button>`).join("") + (this._isAdmin() ? `<button class="scene glass plus" data-nav="/config/script/edit/new" title="${this._t("add_scene")}">${this._icon("mdi:plus")}</button>` : "");
+      </button>`).join("") + (this._isAdmin() ? `<button class="scene glass" data-nav="/config/script/edit/new" title="${this._t("create_script_help")}">${this._icon("mdi:plus")}<span>${this._t("create_script")}</span></button>` : "");
     el.hidden = !this._scenes.length && !this._isAdmin();
   }
 
@@ -1645,6 +1687,12 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 
 /* ---------- panele ---------- */
 .panel{border-radius:18px;padding:13px 16px;overflow:hidden}
+.outer.fit aside:has(.side-entities){overflow-y:auto}
+.outer.fit aside:has(.side-entities)>.panel{flex-shrink:0}
+.outer.fit aside:has(.side-entities)>.status,.outer.fit aside:has(.side-entities)>.energy{flex:1 0 auto}
+.side-entity{display:flex;align-items:center;gap:8px;width:100%;min-height:42px;padding:4px 0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.side-entity span{flex:1;overflow-wrap:anywhere}
+.side-entity strong{max-width:55%;overflow-wrap:anywhere;text-align:right}
 .p-title{display:flex;align-items:center;gap:9px;font-size:18px;font-weight:600;margin-bottom:6px}
 .t-ic{--mdc-icon-size:22px}
 .dim{color:var(--dim);font-size:14px;font-weight:400}
@@ -1818,7 +1866,6 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 .scene:active{transform:translateY(0) scale(.97)}
 .scene.active{background:linear-gradient(180deg,rgba(59,130,246,.5),rgba(29,78,216,.2));border:1.5px solid #3b82f6;box-shadow:0 0 22px rgba(59,130,246,.6),inset 0 0 16px rgba(59,130,246,.3),inset 0 1px 0 rgba(255,255,255,.3)}
 .sc-name{font-size:15.5px;font-weight:600}.sc-sub{font-size:12px;color:var(--dim)}
-.scene.plus{width:70px;height:70px}.scene.plus ha-icon{--mdc-icon-size:30px;margin:0}
 
 /* ---------- animacje ---------- */
 .rise{animation:rise .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--d,0) * 90ms)}
@@ -3876,5 +3923,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.4.0 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.4.1 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();

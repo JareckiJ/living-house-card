@@ -35,6 +35,7 @@ All positions are **percentages of the picture** (0–100), so they work at any 
 | `rooms_page` | path | – | Path of your rooms dashboard, e.g. `/my-rooms/rooms`. Adds the *Rooms* tab and *Open room* buttons. |
 | `nav` | list | auto | Header tabs: `- name, icon, navigate: /path` or `more_info: entity`, `active: true`. |
 | `scenes` | list | `[]` | Scene buttons, see [Scenes](#scenes). |
+| `side_panels` | object | `{}` | Extra entity rows for the left and right panels. |
 | `rooms` | list | `[]` | See below. |
 | `fit` | bool | `true` | Scale to the window without scrolling (laptop/tablet). |
 | `tilt` | bool | `true` | Subtle 3D tilt that follows the mouse. |
@@ -44,6 +45,20 @@ All positions are **percentages of the picture** (0–100), so they work at any 
 | `screensaver_minutes` | number | `0` | `0` = 3 min only when the URL has `?kiosk` or `?tablet`. |
 | `editor` | bool | `true` | Show the calibration button (admins only). |
 
+### Side panels
+
+Add an entity ID to `side_panels.left` or `side_panels.right`. Use an object to
+override its name or icon. Selecting a row opens Home Assistant's entity details.
+
+```yaml
+side_panels:
+  left:
+    - sensor.outdoor_temperature
+  right:
+    - entity: binary_sensor.garage_door
+      name: Garage door
+      icon: mdi:garage
+```
 ### Rooms (house card)
 
 ```yaml

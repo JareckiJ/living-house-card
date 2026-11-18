@@ -24,6 +24,7 @@ const LHC_DEFAULTS = {
   nav: null,
   rooms_page: null,
   scenes: [],
+  side_panels: {},
   rooms: [],
   fit: true,
   scroll_floors: "auto", // tall houses: show bigger + ▲▼ floor arrows (auto | true | false)
@@ -117,6 +118,12 @@ class LivingHouseCard extends HTMLElement {
     this._allLights = lhcUniq(Object.values(lights).flat());
     this._heatingList = lhcArr(c.heating).map((h) => (typeof h === "string" ? { entity: h } : h)).filter((h) => h.entity);
     this._scenes = lhcArr(c.scenes).map((s, i) => ({ id: s.id || `scene${i + 1}`, ...s }));
+    this._sideEntities = {};
+    for (const side of ["left", "right"]) {
+      this._sideEntities[side] = lhcArr(c.side_panels?.[side])
+        .map((item) => typeof item === "string" ? { entity: item } : item)
+        .filter((item) => typeof item?.entity === "string" && item.entity.includes("."));
+    }
     const e = c.energy || {};
     this._energy = typeof e === "string" ? { power: e } : e;
   }
@@ -167,13 +174,13 @@ class LivingHouseCard extends HTMLElement {
     const old = this._hass;
     this._hass = hass;
     const lang = lhcLang(hass, this._cfg);
-    if (lang !== this._lang) {
+    const langChanged = lang !== this._lang;
+    if (langChanged) {
       this._lang = lang;
       if (this._raw && this._raw.preset) { this._cfg = lhcApplyPreset(this._raw, lang); this._normalize(); this._trackedList = null; }
-      if (this._root) this._build();
     }
-    if (!this._root) this._build();
-    if (!old || this._changed(old, hass)) this._update();
+    if (!this._root || langChanged) this._build();
+    else if (!old || this._changed(old, hass)) this._update();
     const now = Date.now();
     if (this._energy.power && (!this._histAt || now - this._histAt > 5 * 60 * 1000)) {
       this._histAt = now;
@@ -188,6 +195,7 @@ class LivingHouseCard extends HTMLElement {
     const pr = c.printer || {};
     const ids = new Set([pr.status, pr.progress, pr.remaining, c.weather, c.weather_fallback_temperature, c.sun, c.alarm, c.ventilation, c.purifier, c.pm25, e.power, e.today, e.cost, c.main_thermostat, ...this._allLights]);
     this._heatingList.forEach((h) => ids.add(h.entity));
+    Object.values(this._sideEntities).flat().forEach(({ entity }) => ids.add(entity));
     this._rooms.forEach((r) => {
       [r.temp, r.hum, r.humExtra, r.climateTemp, r.presence, ...(r.heat || []), ...((r.tv && r.tv.ids) || [])].forEach((x) => x && ids.add(x));
       (r.entities || []).forEach((x) => ids.add(x[0]));
@@ -339,6 +347,7 @@ class LivingHouseCard extends HTMLElement {
           <aside class="left">
             ${c.weather ? `<section class="panel glass weather rise" style="--d:1" id="weather" data-more="${lhcEsc(c.weather)}"></section>` : ""}
             <section class="panel glass status rise" style="--d:2" id="status"></section>
+            ${this._sidePanel("left")}
           </aside>
 
           <main class="stage" id="stage">
@@ -367,6 +376,7 @@ class LivingHouseCard extends HTMLElement {
             ${this._heatingList.length ? `<section class="panel glass heat rise" style="--d:1" id="heat"></section>` : ""}
             ${c.purifier || c.pm25 ? `<section class="panel glass air rise" style="--d:2" id="air"></section>` : ""}
             ${this._energy.power ? `<section class="panel glass energy rise" style="--d:3" id="energy" data-more="${lhcEsc(this._energy.power)}"></section>` : ""}
+            ${this._sidePanel("right")}
           </aside>
 
           <footer class="scenes rise" style="--d:3" id="scenes"></footer>
@@ -470,8 +480,36 @@ class LivingHouseCard extends HTMLElement {
     this._renderHeat();
     this._renderAir();
     this._renderEnergy();
+    this._renderSidePanels();
     this._renderHouse();
     if (this._room) this._renderPop();
+  }
+
+  _sidePanel(side) {
+    return this._sideEntities[side].length
+      ? `<section class="panel glass side-entities" id="entities-${side}"></section>`
+      : "";
+  }
+
+  _renderSidePanels() {
+    Object.entries(this._sideEntities).forEach(([side, items]) => {
+      const el = this._el(`entities-${side}`);
+      if (!el) return;
+      const html = items.map(({ entity, name, icon }) => {
+        const state = this._s(entity);
+        const value = this._hass.formatEntityState
+          ? (state ? this._hass.formatEntityState(state) : "—")
+          : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
+        return `<button type="button" class="side-entity" data-more="${lhcEsc(entity)}">
+          ${this._icon(lhcEsc(icon || state?.attributes.icon || "mdi:information-outline"))}
+          <span>${lhcEsc(this._name(entity, name))}</span><strong>${lhcEsc(value)}</strong>
+        </button>`;
+      }).join("");
+      if (html !== el._lhcHtml) {
+        el.innerHTML = html;
+        el._lhcHtml = html;
+      }
+    });
   }
 
   _weather() {
@@ -694,7 +732,7 @@ class LivingHouseCard extends HTMLElement {
       <button class="scene glass ${this._scene === s.id ? "active" : ""}" data-scene="${lhcEsc(s.id)}">
         ${this._icon(s.icon || "mdi:palette-outline", `style="color:${lhcEsc(s.color || "#c7d2fe")}"`)}
         <div class="sc-name">${lhcEsc(s.name || s.id)}</div>${s.sub ? `<div class="sc-sub">${lhcEsc(s.sub)}</div>` : ""}
-      </button>`).join("") + (this._isAdmin() ? `<button class="scene glass plus" data-nav="/config/script/edit/new" title="${this._t("add_scene")}">${this._icon("mdi:plus")}</button>` : "");
+      </button>`).join("") + (this._isAdmin() ? `<button class="scene glass" data-nav="/config/script/edit/new" title="${this._t("create_script_help")}">${this._icon("mdi:plus")}<span>${this._t("create_script")}</span></button>` : "");
     el.hidden = !this._scenes.length && !this._isAdmin();
   }
 
