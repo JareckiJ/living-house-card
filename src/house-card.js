@@ -227,7 +227,7 @@ class LivingHouseCard extends HTMLElement {
     if (!iso) return "—";
     try { return new Date(iso).toLocaleTimeString(this._lang === "pl" ? "pl-PL" : undefined, { hour: "2-digit", minute: "2-digit", timeZone: this._hass.config.time_zone }); } catch (e) { return "—"; }
   }
-  _icon(i, extra = "") { return `<ha-icon icon="${i}" ${extra}></ha-icon>`; }
+  _icon(i, extra = "") { return `<ha-icon icon="${lhcEsc(i)}" ${extra}></ha-icon>`; }
   _roomTemp(r) {
     if (r.temp) return this._val(r.temp);
     if (r.climateTemp) { const s = this._s(r.climateTemp); return this._num(s && s.attributes.current_temperature); }
@@ -323,11 +323,11 @@ class LivingHouseCard extends HTMLElement {
       this._root.addEventListener("pointerdown", (e) => this._edPointerDown(e));
     }
     const c = this._cfg;
-    const img = c.image ? lhcEsc(c.image) : "";
+    const img = lhcEsc(lhcCssUrl(c.image));
     const [h0, h1] = c.heatmap_range || [16, 26];
     this._root.innerHTML = `
       <style>${LHC_HOUSE_STYLE}</style>
-      <div class="outer fluid" style="--img:url('${img}')">
+      <div class="outer fluid" style="--img:${img}">
         <div class="bg">
           <div class="night"></div>
           <div class="blur-img"></div>
@@ -376,7 +376,7 @@ class LivingHouseCard extends HTMLElement {
                 <svg class="edsvg" id="edsvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
               </div>
               <button class="hm-btn glass ${this._heatmap ? "on" : ""}" id="hmbtn" data-heatmap="1" title="${this._t("heatmap")}">${this._icon("mdi:thermometer-lines")}<span>${this._t("heatmap")}</span></button>
-              <div class="legend glass" id="legend"><span>${h0}°</span><i></i><span>${h1}°</span></div>
+              <div class="legend glass" id="legend"><span>${lhcEsc(h0)}°</span><i></i><span>${lhcEsc(h1)}°</span></div>
               <div class="pop glass" id="pop" hidden></div>
               <div class="edpanel glass" id="edpanel" hidden></div>
             </div>
@@ -415,15 +415,15 @@ class LivingHouseCard extends HTMLElement {
 
   /* stałe warstwy na obrazie: cień pokoju, kolor LED, poświata TV, ekran TV */
   _layersHtml() {
-    const poly = (pts) => `polygon(${pts.map(([x, y]) => `${x}% ${y}%`).join(",")})`;
-    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${g.w}%;height:${g.h}%`;
+    const poly = (pts) => `polygon(${pts.map(([x, y]) => `${Number(x)}% ${Number(y)}%`).join(",")})`;
+    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${Number(g.w)}%;height:${Number(g.h)}%`;
     const shaped = this._rooms.filter((r) => r.shape);
     return `
-      <div class="shades">${shaped.filter((r) => (this._lights[r.id] || []).length).map((r) => `<div class="shade" data-shade="${r.id}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
-      <div class="leds">${shaped.map((r) => `<div class="led" data-led="${r.id}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
+      <div class="shades">${shaped.filter((r) => (this._lights[r.id] || []).length).map((r) => `<div class="shade" data-shade="${lhcEsc(r.id)}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
+      <div class="leds">${shaped.map((r) => `<div class="led" data-led="${lhcEsc(r.id)}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
       <div class="tvs">${this._rooms.filter((r) => r.tv).map((r) => `
-        <div class="tvglow-clip" ${r.shape ? `style="clip-path:${poly(r.shape)}"` : ""}><div class="tvglow" data-tv="${r.id}" style="${box(r.tv)}"></div></div>
-        ${r.tv.screen ? `<div class="tvscreen" data-screen="${r.id}" style="clip-path:${poly(r.tv.screen)}"></div>` : ""}`).join("")}</div>`;
+        <div class="tvglow-clip" ${r.shape ? `style="clip-path:${poly(r.shape)}"` : ""}><div class="tvglow" data-tv="${lhcEsc(r.id)}" style="${box(r.tv)}"></div></div>
+        ${r.tv.screen ? `<div class="tvscreen" data-screen="${lhcEsc(r.id)}" style="clip-path:${poly(r.tv.screen)}"></div>` : ""}`).join("")}</div>`;
   }
 
   _roomLevel(r) {
@@ -449,21 +449,21 @@ class LivingHouseCard extends HTMLElement {
   _updateLayers() {
     const root = this._root, day = this._dayFactor();
     this._rooms.forEach((r) => {
-      const sh = root.querySelector(`[data-shade="${r.id}"]`);
+      const sh = root.querySelector(`[data-shade="${CSS.escape(r.id)}"]`);
       if (sh) {
         let dark = 0.84 * Math.pow(1 - this._roomLevel(r), 1.1) * (1 - 0.55 * day);
         if (this._tvOn(r)) dark *= 0.82;
         sh.style.opacity = this._edit ? "0" : dark.toFixed(3);
       }
-      const led = root.querySelector(`[data-led="${r.id}"]`);
+      const led = root.querySelector(`[data-led="${CSS.escape(r.id)}"]`);
       if (led) {
         const c = this._ledColor(r);
         led.style.opacity = c ? "1" : "0";
         if (c) led.style.setProperty("--led", c.join(","));
       }
-      const tvg = root.querySelector(`[data-tv="${r.id}"]`);
+      const tvg = root.querySelector(`[data-tv="${CSS.escape(r.id)}"]`);
       if (tvg) tvg.classList.toggle("on", this._tvOn(r));
-      const scr = root.querySelector(`[data-screen="${r.id}"]`);
+      const scr = root.querySelector(`[data-screen="${CSS.escape(r.id)}"]`);
       if (scr) scr.classList.toggle("off", !this._tvOn(r));
     });
   }
@@ -523,7 +523,7 @@ class LivingHouseCard extends HTMLElement {
           ? (state ? this._hass.formatEntityState(state) : "—")
           : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
         return `<button type="button" class="side-entity" data-tile="${side}:${index}">
-          ${this._icon(lhcEsc(icon || state?.attributes.icon || "mdi:information-outline"))}
+          ${this._icon(icon || state?.attributes.icon || "mdi:information-outline")}
           <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
         </button>`;
       }).join("");
@@ -573,7 +573,7 @@ class LivingHouseCard extends HTMLElement {
         </div>
       </div>
       <div class="w-grid">
-        <div>${this._icon("mdi:weather-windy", 'class="ic blue"')}${this._num(a.wind_speed, 0)} ${a.wind_speed_unit || "km/h"}</div>
+        <div>${this._icon("mdi:weather-windy", 'class="ic blue"')}${this._num(a.wind_speed, 0)} ${lhcEsc(a.wind_speed_unit || "km/h")}</div>
         <div>${this._icon("mdi:water-outline", 'class="ic blue"')}${this._num(a.humidity, 0)}%</div>
         <div>${this._icon("mdi:weather-sunset-up", 'class="ic amber"')}${this._time(sun && sun.attributes.next_rising)}</div>
         <div>${this._icon("mdi:weather-sunset-down", 'class="ic amber"')}${this._time(sun && sun.attributes.next_setting)}</div>
@@ -598,16 +598,16 @@ class LivingHouseCard extends HTMLElement {
     if (this._allLights.length) rows.push(row("mdi:lightbulb-outline", lightsOn ? "#facc15" : "#64748b", this._t("lights"), lightsOn ? this._t("lights_on", lightsOn) : this._t("all_off"), `data-room="__lights"`));
     if (this._heatingList.length) rows.push(row("mdi:radiator", heatOn ? "#fb923c" : "#64748b", this._t("heating"), heatOn ? this._t("heating_active", heatOn) : this._t("inactive"), c.main_thermostat ? `data-more="${lhcEsc(c.main_thermostat)}"` : ""));
     if (c.ventilation) rows.push(row("mdi:fan", vent && vent.state === "on" ? "#38bdf8" : "#64748b", this._t("ventilation"), vent ? (vent.state === "on" ? this._t("running") : vent.state === "off" ? this._t("off_f") : this._t("no_data")) : "—", `data-more="${lhcEsc(c.ventilation)}"`));
-    if (c.alarm) rows.push(row("mdi:shield-check-outline", al ? LHC_ALARM_COLOR[al.state] || "#4ade80" : "#94a3b8", this._t("security"), al ? lhcMap(this._lang, "alarm", al.state, al.state) : this._t("none"), `data-more="${lhcEsc(c.alarm)}"`));
+    if (c.alarm) rows.push(row("mdi:shield-check-outline", al ? LHC_ALARM_COLOR[al.state] || "#4ade80" : "#94a3b8", this._t("security"), al ? lhcEsc(lhcMap(this._lang, "alarm", al.state)) : this._t("none"), `data-more="${lhcEsc(c.alarm)}"`));
     if (c.pm25) rows.push(row("mdi:leaf", air[1], this._t("air_quality"), air[0], `data-more="${lhcEsc(c.pm25)}"`));
     if (c.printer && c.printer.status) {
       const p = c.printer, ps = this._s(p.status), st = ps ? ps.state : "unknown";
       const prog = Math.round(Number(this._s(p.progress) && this._s(p.progress).state) || 0);
       const left = lhcDuration(this._s(p.remaining));
-      const val = st === "running" ? `${this._t("pr_printing", prog)}${left ? ` · ${left}` : ""}` : lhcMap(this._lang, "pr_status", st, st);
+      const val = st === "running" ? `${this._t("pr_printing", prog)}${left ? ` · ${left}` : ""}` : lhcEsc(lhcMap(this._lang, "pr_status", st));
       const col = st === "running" ? "#22d3ee" : st === "failed" ? "#f87171" : st === "pause" ? "#facc15" : st === "finish" ? "#4ade80" : "#64748b";
       const go = p.page && c.rooms_page ? `data-nav="${lhcEsc(c.rooms_page)}#${lhcEsc(p.page)}"` : `data-more="${lhcEsc(p.progress || p.status)}"`;
-      rows.push(row(st === "failed" ? "mdi:printer-3d-nozzle-alert" : "mdi:printer-3d-nozzle", col, p.name || this._t("printer"), val, go));
+      rows.push(row(st === "failed" ? "mdi:printer-3d-nozzle-alert" : "mdi:printer-3d-nozzle", col, lhcEsc(p.name || this._t("printer")), val, go));
     }
     const changed = this._html(this._el("status"), `
       <div class="p-title">${this._t("status_title")}</div>
@@ -656,7 +656,7 @@ class LivingHouseCard extends HTMLElement {
         </div>`;
       }
       const value = s ? (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" ")) : "—";
-      const icon = this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"));
+      const icon = this._icon(h.icon || s?.attributes.icon || "mdi:radiator");
       // Switches (pump, boiler on/off): power button.
       if (ctl && (dom === "switch" || dom === "input_boolean")) {
         const on = s.state === "on";
@@ -791,7 +791,7 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _renderHouse() {
-    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${g.w}%;height:${g.h}%`;
+    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${Number(g.w)}%;height:${Number(g.h)}%`;
     if (this._heatmap) {
       this._html(this._el("glows"), this._rooms.filter((r) => r.glow).map((r) => {
         const t = this._roomTempNum(r);
@@ -805,9 +805,9 @@ class LivingHouseCard extends HTMLElement {
 
     this._html(this._el("chips"), this._rooms.map((r) => {
       const pos = `left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%`;
-      const ed = this._edit ? `<i class="rz" data-rz="${r.id}"></i>` : "";
+      const ed = this._edit ? `<i class="rz" data-rz="${lhcEsc(r.id)}"></i>` : "";
       const sel = this._edit && this._sel === r.id ? "sel" : "";
-      if (r.label) return `<div class="chip glass label ${sel}" style="${pos}" data-chip="${r.id}">${this._icon(r.icon, 'class="c-ic blue"')}<span class="c-name">${lhcEsc(r.name)}</span><span class="dot"></span>${ed}</div>`;
+      if (r.label) return `<div class="chip glass label ${sel}" style="${pos}" data-chip="${lhcEsc(r.id)}">${this._icon(r.icon, 'class="c-ic blue"')}<span class="c-name">${lhcEsc(r.name)}</span><span class="dot"></span>${ed}</div>`;
       const L = this._lights[r.id] || [];
       const lit = L.some((id) => this._on(id));
       const heat = (r.heat || []).some((id) => this._heating(id));
@@ -829,7 +829,7 @@ class LivingHouseCard extends HTMLElement {
       const occ = r.presence && this._on(r.presence);
       const tNum = this._roomTempNum(r);
       const hmStyle = this._heatmap && Number.isFinite(tNum) ? `;--h:${this._heatHue(tNum).toFixed(0)}` : "";
-      return `<button class="chip glass ${lit ? "lit" : ""} ${heat ? "heat" : ""} ${hmStyle ? "hmc" : ""} ${sel}" style="${pos}${hmStyle}" data-room="${r.id}" data-chip="${r.id}">
+      return `<button class="chip glass ${lit ? "lit" : ""} ${heat ? "heat" : ""} ${hmStyle ? "hmc" : ""} ${sel}" style="${pos}${hmStyle}" data-room="${lhcEsc(r.id)}" data-chip="${lhcEsc(r.id)}">
         ${heat || occ ? `<span class="ping ${heat ? "hot" : "mint"}"></span>` : ""}
         <div class="c-top">${this._icon(icon, `class="${iconCls}"`)}<span class="c-name">${lhcEsc(r.name)}</span></div>
         ${line ? `<div class="c-line">${line}</div>` : ""}${ed}
@@ -891,7 +891,7 @@ class LivingHouseCard extends HTMLElement {
       if (lights.length) bits.push(`<div class="hero-v">${this._icon(lOn ? "mdi:lightbulb-on" : "mdi:lightbulb-outline", `class="${lOn ? "yellow" : "grey"}"`)}<b>${lOn}</b><span>/${lights.length}</span></div>`);
       hero = bits.length ? `<div class="hero">${bits.join("")}</div>` : "";
       sub = heat ? `<span class="tag hot">${this._icon("mdi:fire")}${this._t("heating_tag")}</span>` : "";
-      if (lights.length) sub += `<button class="tag btn" data-roomlights="${r.id}">${this._icon("mdi:lightbulb-group-outline")}${lOn ? this._t("all_off_btn") : this._t("all_on_btn")}</button>`;
+      if (lights.length) sub += `<button class="tag btn" data-roomlights="${lhcEsc(r.id)}">${this._icon("mdi:lightbulb-group-outline")}${lOn ? this._t("all_off_btn") : this._t("all_on_btn")}</button>`;
       if (this._cfg.rooms_page && this._roomPage[r.id]) sub += `<button class="tag btn open" data-nav="${lhcEsc(this._cfg.rooms_page)}#${lhcEsc(this._roomPage[r.id])}">${this._icon("mdi:arrow-top-right")}${this._t("open_room")}</button>`;
     }
     const body = rows ? rows.map(([id, name]) => {
@@ -909,7 +909,7 @@ class LivingHouseCard extends HTMLElement {
         const tt = s.attributes.media_title || s.attributes.app_name;
         val = `${lhcMap(this._lang, "media", s.state, lhcEsc(s.state))}${tt && s.state !== "off" ? ` · ${lhcEsc(tt)}` : ""}`;
       } else if (dom === "binary_sensor") val = s.state === "on" ? this._t("detected") : this._t("clear");
-      else val = `${lhcEsc(s.state)} ${s.attributes.unit_of_measurement || ""}`;
+      else val = `${lhcEsc(s.state)} ${lhcEsc(s.attributes.unit_of_measurement)}`;
       const icon = { switch: "mdi:lightbulb-outline", light: "mdi:led-strip-variant", fan: "mdi:fan", climate: "mdi:thermostat", binary_sensor: "mdi:motion-sensor", sensor: "mdi:thermometer", media_player: "mdi:television" }[dom] || "mdi:circle-small";
       const on = s && (s.state === "on" || (dom === "media_player" && LHC_TV_ON.includes(s.state)));
       return `<div class="p-row"><div class="p-main" data-more="${lhcEsc(id)}">${this._icon(icon, `class="p-ic ${on ? "yellow" : ""}"`)}<div><div>${lhcEsc(this._name(id, name))}</div><small>${val}</small></div></div>${ctl}</div>`;
@@ -1171,7 +1171,7 @@ class LivingHouseCard extends HTMLElement {
     p.innerHTML = `
       <div class="ed-hd">${this._icon("mdi:vector-square-edit")}<b>${this._t("ed_title")}</b><button class="round sm glass" data-edclose="1">${this._icon("mdi:close")}</button></div>
       <div class="ed-hint">${draw === "focus" ? this._t("ed_focus_hint") : draw ? this._t("ed_drawing") : this._t("ed_hint")}</div>
-      <div class="ed-rooms">${this._rooms.map((x) => `<button class="mchip ${this._sel === x.id ? "on" : ""}" data-edsel="${x.id}">${lhcEsc(x.name)}</button>`).join("")}</div>
+      <div class="ed-rooms">${this._rooms.map((x) => `<button class="mchip ${this._sel === x.id ? "on" : ""}" data-edsel="${lhcEsc(x.id)}">${lhcEsc(x.name)}</button>`).join("")}</div>
       ${r && !r.label ? `<div class="ed-acts">
         ${draw ? `<button class="mchip" data-edundo="1">${this._icon("mdi:undo")}${this._t("ed_undo")}</button><button class="mchip on" data-eddone="1">${this._icon("mdi:check")}${this._t("ed_done")}</button>`
         : `<button class="mchip" data-eddraw="shape">${this._icon("mdi:vector-polygon")}${this._t("ed_shape")}</button>
@@ -1185,7 +1185,7 @@ class LivingHouseCard extends HTMLElement {
   _renderEdSvg() {
     const svg = this._el("edsvg");
     if (!svg) return;
-    const pts = (a) => a.map(([x, y]) => `${x},${y}`).join(" ");
+    const pts = (a) => a.map(([x, y]) => `${Number(x)},${Number(y)}`).join(" ");
     let out = "";
     this._rooms.filter((r) => r.shape).forEach((r) => {
       out += `<polygon points="${pts(r.shape)}" class="ed-poly ${this._sel === r.id ? "sel" : ""}"/>`;
@@ -1194,7 +1194,7 @@ class LivingHouseCard extends HTMLElement {
     const r = this._sel && this._rooms.find((x) => x.id === this._sel);
     if (r && !r.label) {
       const f = this._focus(r);
-      out += `<circle cx="${f.x}" cy="${f.y}" r="1.1" class="ed-focus"/>`;
+      out += `<circle cx="${Number(f.x)}" cy="${Number(f.y)}" r="1.1" class="ed-focus"/>`;
     }
     if (this._draft && this._draft.length) {
       out += `<polyline points="${pts(this._draft)}" class="ed-draft"/>`;
@@ -1247,7 +1247,7 @@ class LivingHouseCard extends HTMLElement {
       const dx = ((ev.clientX - sx) / rect.width) * 100, dy = ((ev.clientY - sy) / rect.height) * 100;
       if (rz) { r.w = Math.max(4, Math.round((o.w + dx) * 10) / 10); r.h = Math.max(3, Math.round((o.h + dy) * 10) / 10); }
       else { r.x = Math.round((o.x + dx) * 10) / 10; r.y = Math.round((o.y + dy) * 10) / 10; }
-      const el = this._root.querySelector(`[data-chip="${r.id}"]`);
+      const el = this._root.querySelector(`[data-chip="${CSS.escape(r.id)}"]`);
       if (el) { el.style.left = `${r.x}%`; el.style.top = `${r.y}%`; el.style.width = `${r.w}%`; el.style.height = `${r.h}%`; }
     };
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); this._renderHouse(); };

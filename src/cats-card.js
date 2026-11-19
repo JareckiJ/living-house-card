@@ -39,7 +39,7 @@ class LivingCatsCard extends HTMLElement {
   _s(id) { return id && this._hass ? this._hass.states[id] : undefined; }
   _ok(id) { const s = this._s(id); return !!s && !LHC_BAD.includes(s.state); }
   _on(id) { const s = this._s(id); return !!s && s.state === "on"; }
-  _icon(i, extra = "") { return `<ha-icon icon="${i}" ${extra}></ha-icon>`; }
+  _icon(i, extra = "") { return `<ha-icon icon="${lhcEsc(i)}" ${extra}></ha-icon>`; }
 
   _img(k) {
     const own = this._cfg.images && this._cfg.images[k];
@@ -109,7 +109,7 @@ class LivingCatsCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${LCC_STYLE}</style>
       <div class="wrap">
         <div class="scene glass">
-          ${LCC_SCENES.map((k) => `<div class="layer" data-k="${k}" style="background-image:url('${lhcEsc(this._img(k))}')"></div>`).join("")}
+          ${LCC_SCENES.map((k) => `<div class="layer" data-k="${k}" style="background-image:${lhcEsc(lhcCssUrl(this._img(k)))}"></div>`).join("")}
           <div class="tint"></div>
           <div class="fx fx-uv"></div><div class="fx fx-clean"><i></i><i></i></div><div class="fx fx-full"></div><div class="fx fx-feed"></div>
           ${this._cfg.back_path ? `<button class="back glass" data-nav="${lhcEsc(this._cfg.back_path)}">${this._icon("mdi:arrow-left")}<span>${lhcEsc(this._cfg.back_name || this._t("rooms_title"))}</span></button>` : ""}
