@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 – Lighter and heating for any boiler
+
+- Faster updates: a panel is redrawn only when its content changes, so an entity update no longer redraws the whole card.
+- The weather animation stops when the stars are too faint to see and pauses while the card is off screen.
+- The heating field in the card editor accepts boilers (`water_heater`), sensors, switches and other heating entities, not only thermostats. Existing `heating` and `side_panels.heating` YAML keeps working.
+- A boiler (`water_heater`) shows its current and target temperature like a thermostat.
+
 ## 0.5.0
 
 - Add tiles to the left panel, right panel or heating section from the visual editor.

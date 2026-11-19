@@ -31,7 +31,7 @@ All positions are **percentages of the picture** (0–100), so they work at any 
 | `energy` | object | – | `{ power, today, cost, currency }` – power in W or kW, today in kWh. Shows a 24 h sparkline. |
 | `printer` | object | – | `{ status, progress, remaining, page, name }` – adds a 3D printer row to the status panel (“Printing 45% · 1 h 12 min”). `page` opens that room on the rooms dashboard. |
 | `main_thermostat` | entity | – | Used by the status panel and the screensaver. |
-| `heating` | list | `[]` | Thermostats and other heating entities, optionally with `name` and `icon`. |
+| `heating` | list | `[]` | Thermostats, boilers (`water_heater`), sensors, switches and other heating entities, optionally with `name` and `icon`. A `water_heater` shows its current and target temperature. |
 | `rooms_page` | path | – | Path of your rooms dashboard, e.g. `/my-rooms/rooms`. Adds the *Rooms* tab and *Open room* buttons. |
 | `nav` | list | auto | Header tabs: `- name, icon, navigate: /path` or `more_info: entity`, `active: true`. |
 | `scenes` | list | `[]` | Scene buttons, see [Scenes](#scenes). |

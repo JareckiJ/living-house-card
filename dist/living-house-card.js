@@ -1,8 +1,8 @@
-/*! Living House Card v0.5.0 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.5.1 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.5.0";
+const LHC_VERSION = "0.5.1";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -383,6 +383,8 @@ const LHC_CLOUD = { cloudy: 0.85, partlycloudy: 0.6, rainy: 0.85, pouring: 0.95,
 const LHC_RAIN = { rainy: 130, pouring: 260, "lightning-rainy": 200, "snowy-rainy": 80, hail: 90 };
 const LHC_SNOW = { snowy: 110, "snowy-rainy": 60 };
 const LHC_STARS = { "clear-night": 1, sunny: 1, partlycloudy: 0.55, windy: 0.7, "windy-variant": 0.4, cloudy: 0.12, exceptional: 0.5 };
+// Below this star opacity the sky is too bright to see them, so the canvas loop stops.
+const LHC_STARS_MIN = 0.05;
 const LHC_DN = ["auto", "day", "night"];
 const LHC_DN_ICON = { auto: "mdi:theme-light-dark", day: "mdi:weather-sunny", night: "mdi:weather-night" };
 
@@ -489,6 +491,14 @@ class LivingHouseCard extends HTMLElement {
       });
     }
     if (this._ro) this._ro.observe(this);
+    if (!this._io && window.IntersectionObserver) {
+      // Pause the weather canvas while the card is scrolled away or on a hidden view.
+      this._io = new IntersectionObserver((entries) => {
+        this._offscreen = !entries[entries.length - 1].isIntersecting;
+        if (this._offscreen) { cancelAnimationFrame(this._fxRaf); this._fxRaf = 0; } else this._startFx();
+      });
+    }
+    if (this._io) this._io.observe(this);
     requestAnimationFrame(() => this._fit());
     this._onActivity = this._onActivity || (() => { if (!this._saverOn) this._armSaver(); });
     ["pointerdown", "keydown", "wheel", "touchstart"].forEach((ev) => window.addEventListener(ev, this._onActivity, { passive: true }));
@@ -500,6 +510,7 @@ class LivingHouseCard extends HTMLElement {
     window.removeEventListener("keydown", this._onKey);
     ["pointerdown", "keydown", "wheel", "touchstart"].forEach((ev) => window.removeEventListener(ev, this._onActivity));
     if (this._ro) this._ro.disconnect();
+    if (this._io) this._io.disconnect();
     clearTimeout(this._saverT); clearInterval(this._clockI); clearTimeout(this._boltT);
     cancelAnimationFrame(this._fxRaf); this._fxRaf = 0;
   }
@@ -819,6 +830,16 @@ class LivingHouseCard extends HTMLElement {
     if (this._room) this._renderPop();
   }
 
+  /* Rebuild an element only when its markup changed: keeps ha-icon and
+     glass (backdrop-filter) layers alive between hass updates. */
+  _html(el, html) {
+    if (!el) return false;
+    if (!this._edit && el._lhcHtml === html) return false;
+    el.innerHTML = html;
+    el._lhcHtml = html;
+    return true;
+  }
+
   _sidePanel(side) {
     return this._sideEntities[side].length
       ? `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}"></div>`
@@ -839,10 +860,7 @@ class LivingHouseCard extends HTMLElement {
           <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
         </button>`;
       }).join("");
-      if (html !== el._lhcHtml) {
-        el.innerHTML = html;
-        el._lhcHtml = html;
-      }
+      this._html(el, html);
     });
   }
 
@@ -878,7 +896,7 @@ class LivingHouseCard extends HTMLElement {
     const [label, icon, col] = this._weatherLook(w.state);
     const a = w.attributes;
     const loc = c.location || this._hass.config.location_name || "";
-    el.innerHTML = `
+    this._html(el, `
       <div class="w-top">
         <div class="w-icon">${this._icon(icon, `style="color:${col}"`)}</div>
         <div>
@@ -892,7 +910,7 @@ class LivingHouseCard extends HTMLElement {
         <div>${this._icon("mdi:water-outline", 'class="ic blue"')}${this._num(a.humidity, 0)}%</div>
         <div>${this._icon("mdi:weather-sunset-up", 'class="ic amber"')}${this._time(sun && sun.attributes.next_rising)}</div>
         <div>${this._icon("mdi:weather-sunset-down", 'class="ic amber"')}${this._time(sun && sun.attributes.next_setting)}</div>
-      </div>`;
+      </div>`);
   }
 
   _renderStatus() {
@@ -924,11 +942,11 @@ class LivingHouseCard extends HTMLElement {
       const go = p.page && c.rooms_page ? `data-nav="${lhcEsc(c.rooms_page)}#${lhcEsc(p.page)}"` : `data-more="${lhcEsc(p.progress || p.status)}"`;
       rows.push(row(st === "failed" ? "mdi:printer-3d-nozzle-alert" : "mdi:printer-3d-nozzle", col, p.name || this._t("printer"), val, go));
     }
-    this._el("status").innerHTML = `
+    const changed = this._html(this._el("status"), `
       <div class="p-title">${this._t("status_title")}</div>
       <div class="s-head">${this._icon(head[1], `style="color:${head[2]}"`)}<span>${head[0]}</span></div>
-      ${rows.join("")}`;
-    this._fitStatus();
+      ${rows.join("")}`);
+    if (changed) this._fitStatus();
   }
 
   /* gdy wiersze statusu się nie mieszczą – zagęść je (najpierw odstępy, potem ukryj opisy) */
@@ -949,7 +967,8 @@ class LivingHouseCard extends HTMLElement {
     if (!el) return;
     const rows = this._heatingList.map((h) => {
       const s = this._s(h.entity);
-      if (!h.entity.startsWith("climate.")) {
+      // Thermostats and water heaters (e.g. a boiler) share the same attributes; anything else shows its state.
+      if (!h.entity.startsWith("climate.") && !h.entity.startsWith("water_heater.")) {
         const value = s && (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" "));
         return `<button type="button" class="side-entity" data-more="${lhcEsc(h.entity)}">${this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"))}<span>${lhcEsc(this._name(h.entity, h.name))}</span><strong>${lhcEsc(value ?? "—")}</strong></button>`;
       }
@@ -965,7 +984,7 @@ class LivingHouseCard extends HTMLElement {
         <div class="h-val">${cur != null ? this._num(cur) + "°C" : "—"}</div>
       </div>`;
     }).join("");
-    el.innerHTML = `<div class="p-title">${this._icon("mdi:radiator", 'class="t-ic amber"')}${this._t("heating")}</div>${rows}`;
+    this._html(el, `<div class="p-title">${this._icon("mdi:radiator", 'class="t-ic amber"')}${this._t("heating")}</div>${rows}`);
   }
 
   _renderAir() {
@@ -974,7 +993,7 @@ class LivingHouseCard extends HTMLElement {
     const c = this._cfg, f = this._s(c.purifier);
     const on = f && f.state === "on";
     const mode = f ? (f.attributes.preset_mode ? lhcMap(this._lang, "preset", f.attributes.preset_mode, f.attributes.preset_mode) : on ? "Auto" : this._t("purifier_off")) : this._t("none");
-    el.innerHTML = `
+    this._html(el, `
       <div class="p-title">${this._icon("mdi:weather-windy", 'class="t-ic blue"')}${this._t("air")}</div>
       ${c.purifier ? `<div class="a-row" data-more="${lhcEsc(c.purifier)}">
         ${this._icon("mdi:air-purifier", 'class="a-dev"')}
@@ -985,7 +1004,7 @@ class LivingHouseCard extends HTMLElement {
         ${this._icon("mdi:leaf", 'class="a-dev green"')}
         <div class="a-name">PM2.5</div>
         <div class="a-val">${this._val(c.pm25, 0)} µg/m³</div>
-      </div>` : ""}`;
+      </div>` : ""}`);
   }
 
   _renderEnergy() {
@@ -998,12 +1017,12 @@ class LivingHouseCard extends HTMLElement {
     if (Number.isFinite(kw) && unit !== "kW") kw /= 1000;
     const cost = this._s(e.cost);
     const cur = e.currency ?? (cost && cost.attributes.unit_of_measurement) ?? "";
-    el.innerHTML = `
+    this._html(el, `
       <div class="p-title">${this._icon("mdi:lightning-bolt", 'class="t-ic yellow"')}${this._t("energy")} <span class="dim">${this._t("home_sfx")}</span></div>
       <div class="e-now">${Number.isFinite(kw) ? kw.toFixed(2) : "—"} <span>kW</span></div>
       <div class="spark">${this._spark || ""}</div>
       ${e.today ? `<div class="e-row"><span>${this._t("today")}</span><b>${this._val(e.today, 1)} kWh</b></div>` : ""}
-      ${e.cost ? `<div class="e-row"><span>${this._t("cost_today")}</span><b>${cost && !LHC_BAD.includes(cost.state) ? (e.currency ? lhcEsc(e.currency) + this._num(cost.state, 2) : `${this._num(cost.state, 2)} ${lhcEsc(cur)}`) : "—"}</b></div>` : ""}`;
+      ${e.cost ? `<div class="e-row"><span>${this._t("cost_today")}</span><b>${cost && !LHC_BAD.includes(cost.state) ? (e.currency ? lhcEsc(e.currency) + this._num(cost.state, 2) : `${this._num(cost.state, 2)} ${lhcEsc(cur)}`) : "—"}</b></div>` : ""}`);
   }
 
   _heatHue(t) {
@@ -1019,17 +1038,17 @@ class LivingHouseCard extends HTMLElement {
   _renderHouse() {
     const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${g.w}%;height:${g.h}%`;
     if (this._heatmap) {
-      this._el("glows").innerHTML = this._rooms.filter((r) => r.glow).map((r) => {
+      this._html(this._el("glows"), this._rooms.filter((r) => r.glow).map((r) => {
         const t = this._roomTempNum(r);
         return Number.isFinite(t) ? `<div class="glow hm" style="${box(r.glow)};--h:${this._heatHue(t).toFixed(0)}"></div>` : "";
-      }).join("");
+      }).join(""));
     } else {
-      this._el("glows").innerHTML = this._edit ? "" : this._rooms.filter((r) => r.glow && (this._lights[r.id] || []).length && this._roomLevel(r) > 0.01).map((r) =>
-        `<div class="glow lit" style="${box(r.glow)}"></div>`).join("");
+      this._html(this._el("glows"), this._edit ? "" : this._rooms.filter((r) => r.glow && (this._lights[r.id] || []).length && this._roomLevel(r) > 0.01).map((r) =>
+        `<div class="glow lit" style="${box(r.glow)}"></div>`).join(""));
     }
     this._updateLayers();
 
-    this._el("chips").innerHTML = this._rooms.map((r) => {
+    this._html(this._el("chips"), this._rooms.map((r) => {
       const pos = `left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%`;
       const ed = this._edit ? `<i class="rz" data-rz="${r.id}"></i>` : "";
       const sel = this._edit && this._sel === r.id ? "sel" : "";
@@ -1060,7 +1079,7 @@ class LivingHouseCard extends HTMLElement {
         <div class="c-top">${this._icon(icon, `class="${iconCls}"`)}<span class="c-name">${lhcEsc(r.name)}</span></div>
         ${line ? `<div class="c-line">${line}</div>` : ""}${ed}
       </button>`;
-    }).join("");
+    }).join(""));
     if (this._edit) this._renderEdSvg();
   }
 
@@ -1232,7 +1251,7 @@ class LivingHouseCard extends HTMLElement {
     if (bolt && !this._boltT) this._scheduleBolt();
     if (!bolt && this._boltT) { clearTimeout(this._boltT); this._boltT = null; }
     const dnBtn = this._el("dn");
-    if (dnBtn) { dnBtn.title = this._t("dn_" + this._dn); dnBtn.innerHTML = this._icon(LHC_DN_ICON[this._dn]); dnBtn.classList.toggle("forced", this._dn !== "auto"); }
+    if (dnBtn) { dnBtn.title = this._t("dn_" + this._dn); this._html(dnBtn, this._icon(LHC_DN_ICON[this._dn])); dnBtn.classList.toggle("forced", this._dn !== "auto"); }
     this._startFx();
   }
 
@@ -1245,7 +1264,7 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _startFx() {
-    if (this._fxRaf || !this._root || !this.isConnected) return;
+    if (this._fxRaf || !this._root || !this.isConnected || this._offscreen) return;
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let last = 0;
     const loop = (t) => {
@@ -1281,7 +1300,7 @@ class LivingHouseCard extends HTMLElement {
       };
     }
     const P = this._parts, dt = Math.min(0.1, t - (P.t || t)); P.t = t;
-    if (starA > 0.02) {
+    if (starA > LHC_STARS_MIN) {
       for (const s of P.stars) {
         ctx.globalAlpha = starA * (0.35 + 0.65 * Math.abs(Math.sin(t * s.s + s.p)));
         ctx.fillStyle = "#dbe7ff";
@@ -1313,7 +1332,7 @@ class LivingHouseCard extends HTMLElement {
       }
     }
     ctx.globalAlpha = 1;
-    return P.rain.length > 0 || P.snow.length > 0 || starA > 0.02;
+    return P.rain.length > 0 || P.snow.length > 0 || starA > LHC_STARS_MIN;
   }
 
   /* ---------- tablet: wygaszacz ---------- */
@@ -1991,7 +2010,7 @@ if (!customElements.get("living-house-card")) {
 const LHC_ED_TXT = {
   en: {
     house: "House", own: "My own picture (YAML / calibration)", image: "Picture URL", title: "Title", weather: "Weather",
-    main_thermostat: "Main thermostat", heating: "Heating (thermostats / TRVs)", rooms: "Rooms",
+    main_thermostat: "Main thermostat", heating: "Heating (thermostats, boiler, sensors)", rooms: "Rooms",
     rooms_hint: "Open a room and pick its lights, temperature sensor and TV. Rooms you don't have – switch on \"Hide\".",
     own_hint: "With your own picture, rooms and their positions are set in YAML or with the calibration mode (button on the card).",
     img_warn: "This card has its own picture, so the ready-made house is not shown. Switch to the ready-made house? Your own picture and room positions will be removed from this card (lights and sensors stay).",
@@ -2001,7 +2020,7 @@ const LHC_ED_TXT = {
   },
   pl: {
     house: "Dom", own: "Własny obrazek (YAML / kalibracja)", image: "Adres obrazka", title: "Tytuł", weather: "Pogoda",
-    main_thermostat: "Główny termostat", heating: "Ogrzewanie (termostaty / głowice)", rooms: "Pokoje",
+    main_thermostat: "Główny termostat", heating: "Ogrzewanie (termostaty, kocioł, czujniki)", rooms: "Pokoje",
     rooms_hint: "Rozwiń pokój i wybierz jego światła, czujnik temperatury i TV. Pokoje, których nie masz – włącz „Ukryj”.",
     own_hint: "Przy własnym obrazku pokoje i ich położenie ustawiasz w YAML albo trybem kalibracji (przycisk na karcie).",
     img_warn: "Ta karta ma własny obrazek, więc gotowy dom nie jest pokazywany. Przełączyć na gotowy dom? Własny obrazek i położenie pokoi zostaną usunięte z tej karty (światła i czujniki zostają).",
@@ -2010,6 +2029,8 @@ const LHC_ED_TXT = {
     tv: "TV / odtwarzacz", hide: "Ukryj ten pokój", hidden: "ukryty", set: "ustawiony",
   },
 };
+// Entities the heating picker offers: thermostats, water heaters / boilers and their sensors and switches.
+const LHC_HEATING_DOMAINS = ["climate", "water_heater", "sensor", "binary_sensor", "switch", "input_boolean", "number", "input_number", "select"];
 const LHC_PRESET_NAMES = {
   "2-bedrooms": ["2 bedrooms", "2 sypialnie"], "3-bedrooms": ["3 bedrooms", "3 sypialnie"],
   basement: ["2 bedrooms + basement", "2 sypialnie + piwnica"], attic: ["2 bedrooms + attic", "2 sypialnie + poddasze"],
@@ -2092,7 +2113,7 @@ class LivingHouseCardEditor extends HTMLElement {
       { name: "title", selector: { text: {} } },
       { name: "weather", selector: { entity: { domain: "weather" } } },
       { name: "main_thermostat", selector: { entity: { domain: "climate" } } },
-      { name: "heating", selector: { entity: { domain: "climate", multiple: true } } },
+      { name: "heating", selector: { entity: { domain: LHC_HEATING_DOMAINS, multiple: true } } },
     ];
     top.computeLabel = (s) => this._tx(s.name === "preset" ? "house" : s.name);
     top.addEventListener("value-changed", (e) => this._topChanged(e.detail.value));
@@ -2122,7 +2143,7 @@ class LivingHouseCardEditor extends HTMLElement {
     top.data = {
       preset: c.preset && LHC_PRESETS[c.preset] ? c.preset : "own", image: c.image || "", title: c.title || "",
       weather: c.weather || "", main_thermostat: c.main_thermostat || "",
-      heating: lhcArr(c.heating).map((h) => (typeof h === "string" ? h : h?.entity)).filter((id) => id?.startsWith("climate.")),
+      heating: lhcArr(c.heating).map((h) => (typeof h === "string" ? h : h?.entity)).filter((id) => typeof id === "string"),
     };
     this._syncTileEditor();
     this._root.querySelectorAll("details[data-room]").forEach((d) => {
@@ -2275,12 +2296,13 @@ class LivingHouseCardEditor extends HTMLElement {
     else if (v.preset) { c.preset = v.preset; if (c.image === "/local/living-house/house.webp") delete c.image; }
     if (!c.preset) set("image", v.image);
     set("title", v.title); set("weather", v.weather); set("main_thermostat", v.main_thermostat);
+    // Keep name/icon of entries that stay picked; entries with other domains
+    // (added in YAML) stay too, because the picker cannot show them.
     const old = lhcArr(this._config.heating);
-    const extra = old.filter((h) => {
-      const entity = typeof h === "string" ? h : h?.entity;
-      return entity && !entity.startsWith("climate.");
-    });
-    set("heating", [...lhcArr(v.heating).map((id) => old.find((h) => h && typeof h === "object" && h.entity === id) || { entity: id }), ...extra]);
+    const idOf = (h) => (typeof h === "string" ? h : h?.entity);
+    const pickable = (id) => typeof id === "string" && LHC_HEATING_DOMAINS.includes(id.split(".")[0]);
+    const extra = old.filter((h) => idOf(h) && !pickable(idOf(h)));
+    set("heating", [...lhcArr(v.heating).map((id) => old.find((h) => idOf(h) === id) || { entity: id }), ...extra]);
     this._emit(c);
   }
 
@@ -4062,5 +4084,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.5.0 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.5.1 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();

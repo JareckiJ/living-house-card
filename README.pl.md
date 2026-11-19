@@ -6,7 +6,7 @@
 
 ![Living House Card – noc](images/house-night.webp)
 
-> **Status: v0.1 beta.** U autora działa świetnie – teraz czas na Twój dom. Błędy i pomysły zgłaszaj w [Issues](../../issues).
+> **Status: beta (v0.5).** U autora działa świetnie – teraz czas na Twój dom. Błędy i pomysły zgłaszaj w [Issues](../../issues).
 
 ## ✨ Co potrafi
 
@@ -20,6 +20,8 @@
 | 🌡️ **Mapa ciepła** | Jednym kliknięciem pokoje barwią się kolorem temperatury. |
 | 🔍 **Przybliżanie pokoju** | Klik w pokój – kamera wlatuje, reszta przygasa, obok szklany panel z urządzeniami. |
 | 🧊 **Szklany interfejs** | Pogoda, status domu, ogrzewanie, powietrze, energia (wykres 24 h), sceny. |
+| 🧩 **Własne kafelki** | W edytorze wizualnym dodajesz kafelki do lewego, prawego panelu i ogrzewania: szczegóły encji, przejście do innego widoku (np. kamer) albo akcja po potwierdzeniu (np. otwarcie bramy). |
+| 🔥 **Dowolne ogrzewanie** | Termostaty, kocioł (`water_heater`), jego czujniki i przełączniki – wszystko w panelu ogrzewania. |
 | 🖥️ **Bez przewijania** | Sam dopasowuje się do laptopa i tabletu. Na telefonie – przewijany układ. |
 | 📱 **Tryb tabletu** | `?kiosk` → pełny ekran; po 3 min wygaszacz z zegarem i pogodą. |
 | 🎯 **Tryb kalibracji** | Przeciągasz plakietki, myszką rysujesz obrysy pokoi, kopiujesz YAML. Działa z **dowolnym** obrazkiem domu. |

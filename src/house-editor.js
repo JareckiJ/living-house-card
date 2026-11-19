@@ -5,7 +5,7 @@
 const LHC_ED_TXT = {
   en: {
     house: "House", own: "My own picture (YAML / calibration)", image: "Picture URL", title: "Title", weather: "Weather",
-    main_thermostat: "Main thermostat", heating: "Heating (thermostats / TRVs)", rooms: "Rooms",
+    main_thermostat: "Main thermostat", heating: "Heating (thermostats, boiler, sensors)", rooms: "Rooms",
     rooms_hint: "Open a room and pick its lights, temperature sensor and TV. Rooms you don't have – switch on \"Hide\".",
     own_hint: "With your own picture, rooms and their positions are set in YAML or with the calibration mode (button on the card).",
     img_warn: "This card has its own picture, so the ready-made house is not shown. Switch to the ready-made house? Your own picture and room positions will be removed from this card (lights and sensors stay).",
@@ -15,7 +15,7 @@ const LHC_ED_TXT = {
   },
   pl: {
     house: "Dom", own: "Własny obrazek (YAML / kalibracja)", image: "Adres obrazka", title: "Tytuł", weather: "Pogoda",
-    main_thermostat: "Główny termostat", heating: "Ogrzewanie (termostaty / głowice)", rooms: "Pokoje",
+    main_thermostat: "Główny termostat", heating: "Ogrzewanie (termostaty, kocioł, czujniki)", rooms: "Pokoje",
     rooms_hint: "Rozwiń pokój i wybierz jego światła, czujnik temperatury i TV. Pokoje, których nie masz – włącz „Ukryj”.",
     own_hint: "Przy własnym obrazku pokoje i ich położenie ustawiasz w YAML albo trybem kalibracji (przycisk na karcie).",
     img_warn: "Ta karta ma własny obrazek, więc gotowy dom nie jest pokazywany. Przełączyć na gotowy dom? Własny obrazek i położenie pokoi zostaną usunięte z tej karty (światła i czujniki zostają).",
@@ -24,6 +24,8 @@ const LHC_ED_TXT = {
     tv: "TV / odtwarzacz", hide: "Ukryj ten pokój", hidden: "ukryty", set: "ustawiony",
   },
 };
+// Entities the heating picker offers: thermostats, water heaters / boilers and their sensors and switches.
+const LHC_HEATING_DOMAINS = ["climate", "water_heater", "sensor", "binary_sensor", "switch", "input_boolean", "number", "input_number", "select"];
 const LHC_PRESET_NAMES = {
   "2-bedrooms": ["2 bedrooms", "2 sypialnie"], "3-bedrooms": ["3 bedrooms", "3 sypialnie"],
   basement: ["2 bedrooms + basement", "2 sypialnie + piwnica"], attic: ["2 bedrooms + attic", "2 sypialnie + poddasze"],
@@ -106,7 +108,7 @@ class LivingHouseCardEditor extends HTMLElement {
       { name: "title", selector: { text: {} } },
       { name: "weather", selector: { entity: { domain: "weather" } } },
       { name: "main_thermostat", selector: { entity: { domain: "climate" } } },
-      { name: "heating", selector: { entity: { domain: "climate", multiple: true } } },
+      { name: "heating", selector: { entity: { domain: LHC_HEATING_DOMAINS, multiple: true } } },
     ];
     top.computeLabel = (s) => this._tx(s.name === "preset" ? "house" : s.name);
     top.addEventListener("value-changed", (e) => this._topChanged(e.detail.value));
@@ -136,7 +138,7 @@ class LivingHouseCardEditor extends HTMLElement {
     top.data = {
       preset: c.preset && LHC_PRESETS[c.preset] ? c.preset : "own", image: c.image || "", title: c.title || "",
       weather: c.weather || "", main_thermostat: c.main_thermostat || "",
-      heating: lhcArr(c.heating).map((h) => (typeof h === "string" ? h : h?.entity)).filter((id) => id?.startsWith("climate.")),
+      heating: lhcArr(c.heating).map((h) => (typeof h === "string" ? h : h?.entity)).filter((id) => typeof id === "string"),
     };
     this._syncTileEditor();
     this._root.querySelectorAll("details[data-room]").forEach((d) => {
@@ -289,12 +291,13 @@ class LivingHouseCardEditor extends HTMLElement {
     else if (v.preset) { c.preset = v.preset; if (c.image === "/local/living-house/house.webp") delete c.image; }
     if (!c.preset) set("image", v.image);
     set("title", v.title); set("weather", v.weather); set("main_thermostat", v.main_thermostat);
+    // Keep name/icon of entries that stay picked; entries with other domains
+    // (added in YAML) stay too, because the picker cannot show them.
     const old = lhcArr(this._config.heating);
-    const extra = old.filter((h) => {
-      const entity = typeof h === "string" ? h : h?.entity;
-      return entity && !entity.startsWith("climate.");
-    });
-    set("heating", [...lhcArr(v.heating).map((id) => old.find((h) => h && typeof h === "object" && h.entity === id) || { entity: id }), ...extra]);
+    const idOf = (h) => (typeof h === "string" ? h : h?.entity);
+    const pickable = (id) => typeof id === "string" && LHC_HEATING_DOMAINS.includes(id.split(".")[0]);
+    const extra = old.filter((h) => idOf(h) && !pickable(idOf(h)));
+    set("heating", [...lhcArr(v.heating).map((id) => old.find((h) => idOf(h) === id) || { entity: id }), ...extra]);
     this._emit(c);
   }
 

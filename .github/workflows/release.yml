@@ -27,4 +27,4 @@ jobs:
         with:
           files: dist/living-house-card.js
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
