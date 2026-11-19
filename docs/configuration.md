@@ -31,11 +31,11 @@ All positions are **percentages of the picture** (0–100), so they work at any 
 | `energy` | object | – | `{ power, today, cost, currency }` – power in W or kW, today in kWh. Shows a 24 h sparkline. |
 | `printer` | object | – | `{ status, progress, remaining, page, name }` – adds a 3D printer row to the status panel (“Printing 45% · 1 h 12 min”). `page` opens that room on the rooms dashboard. |
 | `main_thermostat` | entity | – | Used by the status panel and the screensaver. |
-| `heating` | list | `[]` | `- entity: climate.x` + optional `name`, `icon`. |
+| `heating` | list | `[]` | Thermostats and other heating entities, optionally with `name` and `icon`. |
 | `rooms_page` | path | – | Path of your rooms dashboard, e.g. `/my-rooms/rooms`. Adds the *Rooms* tab and *Open room* buttons. |
 | `nav` | list | auto | Header tabs: `- name, icon, navigate: /path` or `more_info: entity`, `active: true`. |
 | `scenes` | list | `[]` | Scene buttons, see [Scenes](#scenes). |
-| `side_panels` | object | `{}` | Extra entity rows for the left and right panels. |
+| `side_panels` | object | `{}` | Tiles for the left, right and heating sections. |
 | `rooms` | list | `[]` | See below. |
 | `fit` | bool | `true` | Scale to the window without scrolling (laptop/tablet). |
 | `tilt` | bool | `true` | Subtle 3D tilt that follows the mouse. |
@@ -45,19 +45,34 @@ All positions are **percentages of the picture** (0–100), so they work at any 
 | `screensaver_minutes` | number | `0` | `0` = 3 min only when the URL has `?kiosk` or `?tablet`. |
 | `editor` | bool | `true` | Show the calibration button (admins only). |
 
-### Side panels
+### Tiles
 
-Add an entity ID to `side_panels.left` or `side_panels.right`. Use an object to
-override its name or icon. Selecting a row opens Home Assistant's entity details.
+Open **Tiles** in the card editor, choose a placement and pick an entity. Home
+Assistant shows the result in the card preview. By default, selecting the tile
+opens entity details. A tile can also navigate to a local dashboard view or
+perform a Home Assistant action on its entity after confirmation.
 
 ```yaml
 side_panels:
   left:
-    - sensor.outdoor_temperature
+    - entity: cover.driveway_gate
+      name: Driveway gate
+      icon: mdi:gate
+      tap_action:
+        action: perform-action
+        perform_action: cover.open_cover
+        confirmation: Open the driveway gate?
   right:
-    - entity: binary_sensor.garage_door
-      name: Garage door
-      icon: mdi:garage
+    - name: Cameras
+      icon: mdi:cctv
+      tap_action:
+        action: navigate
+        navigation_path: /my-home/cameras
+  heating:
+    - entity: sensor.pellet_boiler_status
+      name: Pellet boiler
+    - sensor.boiler_water_temperature
+    - sensor.pellet_level
 ```
 ### Rooms (house card)
 

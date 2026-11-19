@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Add tiles to the left panel, right panel or heating section from the visual editor.
+- Tiles can show entity details, open a dashboard view or run a Home Assistant action after confirmation.
+- Show general entities alongside thermostats in the heating section.
+
 ## 0.4.1 – House dashboard fixes
 
 - Render the house card once on startup instead of twice.

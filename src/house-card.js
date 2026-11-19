@@ -116,13 +116,13 @@ class LivingHouseCard extends HTMLElement {
     this._weights = weights;
     this._roomPage = page;
     this._allLights = lhcUniq(Object.values(lights).flat());
-    this._heatingList = lhcArr(c.heating).map((h) => (typeof h === "string" ? { entity: h } : h)).filter((h) => h.entity);
+    this._heatingList = lhcArr(c.heating).map((h) => (typeof h === "string" ? { entity: h } : h)).filter((h) => typeof h?.entity === "string");
     this._scenes = lhcArr(c.scenes).map((s, i) => ({ id: s.id || `scene${i + 1}`, ...s }));
     this._sideEntities = {};
-    for (const side of ["left", "right"]) {
+    for (const side of ["left", "right", "heating"]) {
       this._sideEntities[side] = lhcArr(c.side_panels?.[side])
         .map((item) => typeof item === "string" ? { entity: item } : item)
-        .filter((item) => typeof item?.entity === "string" && item.entity.includes("."));
+        .filter((item) => item && (typeof item.entity === "string" || item.tap_action?.action === "navigate"));
     }
     const e = c.energy || {};
     this._energy = typeof e === "string" ? { power: e } : e;
@@ -373,7 +373,7 @@ class LivingHouseCard extends HTMLElement {
           </main>
 
           <aside class="right">
-            ${this._heatingList.length ? `<section class="panel glass heat rise" style="--d:1" id="heat"></section>` : ""}
+            ${this._heatingList.length || this._sideEntities.heating.length ? `<section class="panel glass heat rise" style="--d:1" id="heat"><div id="heat-thermostats"></div>${this._sidePanel("heating")}</section>` : ""}
             ${c.purifier || c.pm25 ? `<section class="panel glass air rise" style="--d:2" id="air"></section>` : ""}
             ${this._energy.power ? `<section class="panel glass energy rise" style="--d:3" id="energy" data-more="${lhcEsc(this._energy.power)}"></section>` : ""}
             ${this._sidePanel("right")}
@@ -487,7 +487,7 @@ class LivingHouseCard extends HTMLElement {
 
   _sidePanel(side) {
     return this._sideEntities[side].length
-      ? `<section class="panel glass side-entities" id="entities-${side}"></section>`
+      ? `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}"></div>`
       : "";
   }
 
@@ -495,14 +495,14 @@ class LivingHouseCard extends HTMLElement {
     Object.entries(this._sideEntities).forEach(([side, items]) => {
       const el = this._el(`entities-${side}`);
       if (!el) return;
-      const html = items.map(({ entity, name, icon }) => {
+      const html = items.map(({ entity, name, icon }, index) => {
         const state = this._s(entity);
         const value = this._hass.formatEntityState
           ? (state ? this._hass.formatEntityState(state) : "—")
           : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
-        return `<button type="button" class="side-entity" data-more="${lhcEsc(entity)}">
+        return `<button type="button" class="side-entity" data-tile="${side}:${index}">
           ${this._icon(lhcEsc(icon || state?.attributes.icon || "mdi:information-outline"))}
-          <span>${lhcEsc(this._name(entity, name))}</span><strong>${lhcEsc(value)}</strong>
+          <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
         </button>`;
       }).join("");
       if (html !== el._lhcHtml) {
@@ -611,10 +611,14 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _renderHeat() {
-    const el = this._el("heat");
+    const el = this._el("heat-thermostats");
     if (!el) return;
     const rows = this._heatingList.map((h) => {
       const s = this._s(h.entity);
+      if (!h.entity.startsWith("climate.")) {
+        const value = s && (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" "));
+        return `<button type="button" class="side-entity" data-more="${lhcEsc(h.entity)}">${this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"))}<span>${lhcEsc(this._name(h.entity, h.name))}</span><strong>${lhcEsc(value ?? "—")}</strong></button>`;
+      }
       const heating = this._heating(h.entity);
       const off = !s || s.state === "off" || LHC_BAD.includes(s.state);
       const cur = s ? s.attributes.current_temperature : null;
@@ -1195,7 +1199,7 @@ class LivingHouseCard extends HTMLElement {
   _click(e) {
     const path = e.composedPath();
     const stop = path.indexOf(this._root);
-    const keys = ["fnav", "toggle", "more", "nav", "room", "scene", "roomlights", "dn", "heatmap", "wake", "edit", "edsel", "eddraw", "edundo", "eddone", "edcopy", "edclose", "close"];
+    const keys = ["fnav", "toggle", "more", "nav", "tile", "room", "scene", "roomlights", "dn", "heatmap", "wake", "edit", "edsel", "eddraw", "edundo", "eddone", "edcopy", "edclose", "close"];
     const t = (stop >= 0 ? path.slice(0, stop) : path).find((n) => n.dataset && Object.keys(n.dataset).some((k) => keys.includes(k)));
     if (!t) return;
     const d = t.dataset;
@@ -1239,8 +1243,26 @@ class LivingHouseCard extends HTMLElement {
       return this._openRoom(d.room);
     }
     if (d.scene) return this._runScene(d.scene);
+    if (d.tile) return this._runTile(d.tile);
     if (d.nav) return lhcNavigate(d.nav);
     if (d.more) return this._more(d.more);
+  }
+
+  async _runTile(key) {
+    const [side, index] = key.split(":");
+    const tile = this._sideEntities[side]?.[index];
+    if (!tile) return;
+    const action = tile.tap_action || { action: "more-info" };
+    if (action.action === "more-info" && tile.entity) return this._more(tile.entity);
+    if (action.action === "navigate" && /^\/(?![\/\\])/.test(action.navigation_path || "")) return lhcNavigate(action.navigation_path);
+    if (action.action !== "perform-action" || !tile.entity || !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(action.perform_action || "")) return;
+    if (!window.confirm(action.confirmation || this._t("tile_confirm", this._name(tile.entity, tile.name)))) return;
+    try {
+      await lhcRunActions(this._hass, [{ perform_action: action.perform_action, target: { entity_id: tile.entity } }]);
+    } catch (err) {
+      console.error("living-house-card tile", err);
+      this._fire("hass-notification", { message: this._t("tile_error") });
+    }
   }
 
   async _runScene(id) {

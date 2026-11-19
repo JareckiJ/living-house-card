@@ -1,8 +1,8 @@
-/*! Living House Card v0.4.1 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.5.0 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.4.1";
+const LHC_VERSION = "0.5.0";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -33,6 +33,8 @@ const LHC_I18N = {
     nav_home: "Home", nav_rooms: "Rooms", nav_energy: "Energy",
     search: "Search", settings: "Settings",
     create_script: "Create HA script",
+    tile_confirm: (name) => `Run the action for ${name}?`,
+    tile_error: "Could not run the tile action.",
     create_script_help: "Open the Home Assistant script editor. To add a button here, configure scenes on this card.",
     dn_auto: "Day/night: automatic", dn_day: "Forced day", dn_night: "Forced night",
     status_title: "Home status", all_ok: "All good", alarm_bang: "Alarm!",
@@ -110,6 +112,8 @@ const LHC_I18N = {
     nav_home: "Dom", nav_rooms: "Pomieszczenia", nav_energy: "Energia",
     search: "Szukaj", settings: "Ustawienia",
     create_script: "Utwórz skrypt HA",
+    tile_confirm: (name) => `Wykonać akcję dla „${name}”?`,
+    tile_error: "Nie udało się wykonać akcji kafelka.",
     create_script_help: "Otwiera edytor skryptów Home Assistanta. Aby dodać tutaj przycisk, skonfiguruj scenes w karcie.",
     dn_auto: "Dzień/noc: automatycznie", dn_day: "Wymuszony dzień", dn_night: "Wymuszona noc",
     status_title: "Status domu", all_ok: "Wszystko OK", alarm_bang: "Alarm!",
@@ -446,13 +450,13 @@ class LivingHouseCard extends HTMLElement {
     this._weights = weights;
     this._roomPage = page;
     this._allLights = lhcUniq(Object.values(lights).flat());
-    this._heatingList = lhcArr(c.heating).map((h) => (typeof h === "string" ? { entity: h } : h)).filter((h) => h.entity);
+    this._heatingList = lhcArr(c.heating).map((h) => (typeof h === "string" ? { entity: h } : h)).filter((h) => typeof h?.entity === "string");
     this._scenes = lhcArr(c.scenes).map((s, i) => ({ id: s.id || `scene${i + 1}`, ...s }));
     this._sideEntities = {};
-    for (const side of ["left", "right"]) {
+    for (const side of ["left", "right", "heating"]) {
       this._sideEntities[side] = lhcArr(c.side_panels?.[side])
         .map((item) => typeof item === "string" ? { entity: item } : item)
-        .filter((item) => typeof item?.entity === "string" && item.entity.includes("."));
+        .filter((item) => item && (typeof item.entity === "string" || item.tap_action?.action === "navigate"));
     }
     const e = c.energy || {};
     this._energy = typeof e === "string" ? { power: e } : e;
@@ -703,7 +707,7 @@ class LivingHouseCard extends HTMLElement {
           </main>
 
           <aside class="right">
-            ${this._heatingList.length ? `<section class="panel glass heat rise" style="--d:1" id="heat"></section>` : ""}
+            ${this._heatingList.length || this._sideEntities.heating.length ? `<section class="panel glass heat rise" style="--d:1" id="heat"><div id="heat-thermostats"></div>${this._sidePanel("heating")}</section>` : ""}
             ${c.purifier || c.pm25 ? `<section class="panel glass air rise" style="--d:2" id="air"></section>` : ""}
             ${this._energy.power ? `<section class="panel glass energy rise" style="--d:3" id="energy" data-more="${lhcEsc(this._energy.power)}"></section>` : ""}
             ${this._sidePanel("right")}
@@ -817,7 +821,7 @@ class LivingHouseCard extends HTMLElement {
 
   _sidePanel(side) {
     return this._sideEntities[side].length
-      ? `<section class="panel glass side-entities" id="entities-${side}"></section>`
+      ? `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}"></div>`
       : "";
   }
 
@@ -825,14 +829,14 @@ class LivingHouseCard extends HTMLElement {
     Object.entries(this._sideEntities).forEach(([side, items]) => {
       const el = this._el(`entities-${side}`);
       if (!el) return;
-      const html = items.map(({ entity, name, icon }) => {
+      const html = items.map(({ entity, name, icon }, index) => {
         const state = this._s(entity);
         const value = this._hass.formatEntityState
           ? (state ? this._hass.formatEntityState(state) : "—")
           : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
-        return `<button type="button" class="side-entity" data-more="${lhcEsc(entity)}">
+        return `<button type="button" class="side-entity" data-tile="${side}:${index}">
           ${this._icon(lhcEsc(icon || state?.attributes.icon || "mdi:information-outline"))}
-          <span>${lhcEsc(this._name(entity, name))}</span><strong>${lhcEsc(value)}</strong>
+          <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
         </button>`;
       }).join("");
       if (html !== el._lhcHtml) {
@@ -941,10 +945,14 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _renderHeat() {
-    const el = this._el("heat");
+    const el = this._el("heat-thermostats");
     if (!el) return;
     const rows = this._heatingList.map((h) => {
       const s = this._s(h.entity);
+      if (!h.entity.startsWith("climate.")) {
+        const value = s && (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" "));
+        return `<button type="button" class="side-entity" data-more="${lhcEsc(h.entity)}">${this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"))}<span>${lhcEsc(this._name(h.entity, h.name))}</span><strong>${lhcEsc(value ?? "—")}</strong></button>`;
+      }
       const heating = this._heating(h.entity);
       const off = !s || s.state === "off" || LHC_BAD.includes(s.state);
       const cur = s ? s.attributes.current_temperature : null;
@@ -1525,7 +1533,7 @@ class LivingHouseCard extends HTMLElement {
   _click(e) {
     const path = e.composedPath();
     const stop = path.indexOf(this._root);
-    const keys = ["fnav", "toggle", "more", "nav", "room", "scene", "roomlights", "dn", "heatmap", "wake", "edit", "edsel", "eddraw", "edundo", "eddone", "edcopy", "edclose", "close"];
+    const keys = ["fnav", "toggle", "more", "nav", "tile", "room", "scene", "roomlights", "dn", "heatmap", "wake", "edit", "edsel", "eddraw", "edundo", "eddone", "edcopy", "edclose", "close"];
     const t = (stop >= 0 ? path.slice(0, stop) : path).find((n) => n.dataset && Object.keys(n.dataset).some((k) => keys.includes(k)));
     if (!t) return;
     const d = t.dataset;
@@ -1569,8 +1577,26 @@ class LivingHouseCard extends HTMLElement {
       return this._openRoom(d.room);
     }
     if (d.scene) return this._runScene(d.scene);
+    if (d.tile) return this._runTile(d.tile);
     if (d.nav) return lhcNavigate(d.nav);
     if (d.more) return this._more(d.more);
+  }
+
+  async _runTile(key) {
+    const [side, index] = key.split(":");
+    const tile = this._sideEntities[side]?.[index];
+    if (!tile) return;
+    const action = tile.tap_action || { action: "more-info" };
+    if (action.action === "more-info" && tile.entity) return this._more(tile.entity);
+    if (action.action === "navigate" && /^\/(?![\/\\])/.test(action.navigation_path || "")) return lhcNavigate(action.navigation_path);
+    if (action.action !== "perform-action" || !tile.entity || !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(action.perform_action || "")) return;
+    if (!window.confirm(action.confirmation || this._t("tile_confirm", this._name(tile.entity, tile.name)))) return;
+    try {
+      await lhcRunActions(this._hass, [{ perform_action: action.perform_action, target: { entity_id: tile.entity } }]);
+    } catch (err) {
+      console.error("living-house-card tile", err);
+      this._fire("hass-notification", { message: this._t("tile_error") });
+    }
   }
 
   async _runScene(id) {
@@ -2045,6 +2071,7 @@ class LivingHouseCardEditor extends HTMLElement {
       </style>
       <div class="lhc-ed">
         <ha-form data-form="top"></ha-form>
+        <details data-tiles><summary>${pl ? "Kafelki" : "Tiles"}</summary><ha-form></ha-form><div data-tile-list></div></details>
         ${preset && this._config.image ? `<div class="warn">${this._tx("img_warn")}<br><button type="button" data-dropimg>${this._tx("img_btn")}</button></div>` : ""}
         ${preset ? `<img class="thumb" src="${lhcEsc(lhcPresetImage({ ...this._config, preset }))}" alt="">` : ""}
         ${preset ? `<h3>${this._tx("rooms")}</h3><p class="hint">${this._tx("rooms_hint")}</p>
@@ -2071,7 +2098,7 @@ class LivingHouseCardEditor extends HTMLElement {
     top.addEventListener("value-changed", (e) => this._topChanged(e.detail.value));
     const drop = this._root.querySelector("[data-dropimg]");
     if (drop) drop.addEventListener("click", () => this._usePreset());
-    this._root.querySelectorAll("details > ha-form").forEach((f) => {
+    this._root.querySelectorAll("details[data-room] > ha-form").forEach((f) => {
       const id = f.dataset.form;
       f.schema = [
         { name: "name", selector: { text: {} } },
@@ -2084,6 +2111,7 @@ class LivingHouseCardEditor extends HTMLElement {
       f.computeLabel = (s) => this._tx(s.name);
       f.addEventListener("value-changed", (e) => this._roomChanged(id, e.detail.value));
     });
+    this._initTileEditor();
     this._sync();
   }
 
@@ -2094,8 +2122,9 @@ class LivingHouseCardEditor extends HTMLElement {
     top.data = {
       preset: c.preset && LHC_PRESETS[c.preset] ? c.preset : "own", image: c.image || "", title: c.title || "",
       weather: c.weather || "", main_thermostat: c.main_thermostat || "",
-      heating: lhcArr(c.heating).map((h) => (typeof h === "string" ? h : h && h.entity)).filter(Boolean),
+      heating: lhcArr(c.heating).map((h) => (typeof h === "string" ? h : h?.entity)).filter((id) => id?.startsWith("climate.")),
     };
+    this._syncTileEditor();
     this._root.querySelectorAll("details[data-room]").forEach((d) => {
       const id = d.dataset.room, u = this._user(id), m = LHC_ROOM_META[id] || ["", id, id];
       const tv = !u.tv ? [] : Array.isArray(u.tv) ? u.tv : typeof u.tv === "string" ? [u.tv] : lhcArr(u.tv.entities || u.tv.entity);
@@ -2111,6 +2140,112 @@ class LivingHouseCardEditor extends HTMLElement {
       const f = d.querySelector("ha-form");
       f.hass = this._hass; f.data = data;
     });
+  }
+
+  _initTileEditor() {
+    const pl = this._lang === "pl";
+    const form = this._root.querySelector("[data-tiles] ha-form");
+    const fields = {
+      side: pl ? "Miejsce" : "Placement", entity: pl ? "Encja" : "Entity",
+      name: pl ? "Nazwa" : "Name", icon: pl ? "Ikona" : "Icon",
+      path: pl ? "Ścieżka widoku (opcjonalnie)" : "View path (optional)",
+      service: pl ? "Akcja HA (opcjonalnie)" : "HA action (optional)",
+    };
+    form.schema = [
+      { name: "side", selector: { select: { mode: "dropdown", options: [
+        { value: "left", label: pl ? "Lewy panel" : "Left panel" },
+        { value: "right", label: pl ? "Prawy panel" : "Right panel" },
+        { value: "heating", label: pl ? "Ogrzewanie" : "Heating" },
+      ] } } },
+      { name: "entity", selector: { entity: {} } },
+      { name: "name", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
+      { name: "path", selector: { text: {} } },
+      { name: "service", selector: { text: {} } },
+    ];
+    form.computeLabel = (schema) => fields[schema.name];
+    const button = document.createElement("button");
+    button.type = "button";
+    const addLabel = pl ? "Dodaj kafelek" : "Add tile";
+    const saveLabel = pl ? "Zapisz kafelek" : "Save tile";
+    button.textContent = addLabel;
+    this._tileEdit = null;
+    const valid = (v) => !!(v.entity || v.path) && !(v.path && v.service)
+      && (!v.path || /^\/(?![\/\\])/.test(v.path))
+      && (!v.service || (v.entity && /^[a-z0-9_]+\.[a-z0-9_]+$/.test(v.service)));
+    form.data = { side: "left" };
+    button.disabled = true;
+    form.addEventListener("value-changed", (event) => {
+      event.stopPropagation();
+      form.data = event.detail.value;
+      button.disabled = !valid(form.data);
+    });
+    button.onclick = () => {
+      const v = form.data;
+      if (!valid(v)) return;
+      const side = v.side || "left";
+      const edit = this._tileEdit;
+      const tile = { ...edit?.tile };
+      for (const key of ["entity", "name", "icon", "tap_action"]) delete tile[key];
+      for (const key of ["entity", "name", "icon"]) if (v[key]) tile[key] = v[key];
+      if (v.path) tile.tap_action = { action: "navigate", navigation_path: v.path };
+      if (v.service) {
+        tile.tap_action = { action: "perform-action", perform_action: v.service };
+        if (edit?.tile.tap_action?.confirmation) tile.tap_action.confirmation = edit.tile.tap_action.confirmation;
+      }
+      const panels = { ...this._config.side_panels };
+      if (edit) panels[edit.side] = lhcArr(panels[edit.side]).filter((_, index) => index !== edit.index);
+      const items = [...lhcArr(panels[side])];
+      items.splice(edit?.side === side ? edit.index : items.length, 0, tile);
+      panels[side] = items;
+      this._tileEdit = null;
+      form.data = { side };
+      button.textContent = addLabel;
+      button.disabled = true;
+      this._emit({ ...this._config, side_panels: panels });
+    };
+    this._editTile = (side, index, tile) => {
+      this._tileEdit = tile ? { side, index, tile } : null;
+      form.data = tile ? { side, entity: tile.entity, name: tile.name, icon: tile.icon,
+        path: tile.tap_action?.navigation_path, service: tile.tap_action?.perform_action } : { side };
+      button.textContent = tile ? saveLabel : addLabel;
+      button.disabled = !valid(form.data);
+    };
+    form.after(button);
+  }
+
+  _syncTileEditor() {
+    const host = this._root.querySelector("[data-tile-list]");
+    host.replaceChildren();
+    const pl = this._lang === "pl";
+    const sections = pl ? ["Lewy panel", "Prawy panel", "Ogrzewanie"] : ["Left panel", "Right panel", "Heating"];
+    ["left", "right", "heating"].forEach((side, index) => {
+      const items = lhcArr(this._config.side_panels?.[side]);
+      items.forEach((raw, i) => {
+        const tile = typeof raw === "string" ? { entity: raw } : raw;
+        if (!tile) return;
+        const row = document.createElement("p");
+        row.textContent = `${sections[index]} · ${tile.name || tile.entity || tile.tap_action?.navigation_path || "—"} `;
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.textContent = pl ? "Edytuj" : "Edit";
+        edit.onclick = () => this._editTile(side, i, tile);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = pl ? "Usuń" : "Remove";
+        remove.onclick = () => {
+          if (this._tileEdit?.side === side) this._editTile(side);
+          this._setTiles(side, items.filter((_, j) => j !== i));
+        };
+        row.append(edit, remove);
+        host.append(row);
+      });
+    });
+    this._root.querySelector("[data-tiles] ha-form").hass = this._hass;
+  }
+
+  _setTiles(side, items) {
+    this._emit({ ...this._config, side_panels: { ...this._config.side_panels, [side]: items } });
   }
 
   _emit(config) {
@@ -2141,7 +2276,11 @@ class LivingHouseCardEditor extends HTMLElement {
     if (!c.preset) set("image", v.image);
     set("title", v.title); set("weather", v.weather); set("main_thermostat", v.main_thermostat);
     const old = lhcArr(this._config.heating);
-    set("heating", lhcArr(v.heating).map((id) => old.find((h) => h && typeof h === "object" && h.entity === id) || { entity: id }));
+    const extra = old.filter((h) => {
+      const entity = typeof h === "string" ? h : h?.entity;
+      return entity && !entity.startsWith("climate.");
+    });
+    set("heating", [...lhcArr(v.heating).map((id) => old.find((h) => h && typeof h === "object" && h.entity === id) || { entity: id }), ...extra]);
     this._emit(c);
   }
 
@@ -3923,5 +4062,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.4.1 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.5.0 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();
