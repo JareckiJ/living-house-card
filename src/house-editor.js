@@ -25,7 +25,7 @@ const LHC_ED_TXT = {
   },
 };
 // Entities the heating picker offers: thermostats, water heaters / boilers and their sensors and switches.
-const LHC_HEATING_DOMAINS = ["climate", "water_heater", "sensor", "binary_sensor", "switch", "input_boolean", "number", "input_number", "select"];
+const LHC_HEATING_DOMAINS = ["climate", "water_heater", "sensor", "binary_sensor", "switch", "input_boolean", "number", "input_number", "select", "input_select"];
 const LHC_PRESET_NAMES = {
   "2-bedrooms": ["2 bedrooms", "2 sypialnie"], "3-bedrooms": ["3 bedrooms", "3 sypialnie"],
   basement: ["2 bedrooms + basement", "2 sypialnie + piwnica"], attic: ["2 bedrooms + attic", "2 sypialnie + poddasze"],

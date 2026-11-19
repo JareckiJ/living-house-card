@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 – Heating controls
+
+- Heating rows get controls that match the entity type: − / + for thermostats, water heaters and numbers, a power button for switches, a list for selects. Sensors stay read-only.
+- − / + changes the value on the card first and sends it once you stop clicking, so three taps make one change.
+- Switching a heating switch off asks first; add `confirm: false` to skip the question, or `controls: false` to show the entity read-only.
+
 ## 0.5.1 – Lighter and heating for any boiler
 
 - Faster updates: a panel is redrawn only when its content changes, so an entity update no longer redraws the whole card.

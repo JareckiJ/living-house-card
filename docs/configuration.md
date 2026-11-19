@@ -74,6 +74,30 @@ side_panels:
     - sensor.boiler_water_temperature
     - sensor.pellet_level
 ```
+
+### Heating controls
+
+Each row in the heating section gets controls that match its entity:
+
+| Entity | Row |
+|---|---|
+| `climate`, `water_heater` | Current temperature, target, − / + |
+| `number`, `input_number` | Value with − / + (uses the entity's `step`, `min`, `max`) |
+| `switch`, `input_boolean` | Power button; switching off asks first |
+| `select`, `input_select` | List of options |
+| anything else | State only |
+
+Selecting the name always opens entity details. − / + sends the new value
+once you stop clicking.
+
+```yaml
+heating:
+  - water_heater.pellet_boiler
+  - entity: switch.heating_pump
+    confirm: false        # switch off without asking
+  - entity: number.boiler_set_point
+    controls: false       # show the value only
+```
 ### Rooms (house card)
 
 ```yaml

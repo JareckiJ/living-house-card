@@ -1,8 +1,8 @@
-/*! Living House Card v0.5.1 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.5.2 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.5.1";
+const LHC_VERSION = "0.5.2";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -35,6 +35,7 @@ const LHC_I18N = {
     create_script: "Create HA script",
     tile_confirm: (name) => `Run the action for ${name}?`,
     tile_error: "Could not run the tile action.",
+    heat_off_confirm: (name) => `Turn off ${name}?`, heat_error: "Could not change the heating.", lower: "Lower", higher: "Higher",
     create_script_help: "Open the Home Assistant script editor. To add a button here, configure scenes on this card.",
     dn_auto: "Day/night: automatic", dn_day: "Forced day", dn_night: "Forced night",
     status_title: "Home status", all_ok: "All good", alarm_bang: "Alarm!",
@@ -114,6 +115,7 @@ const LHC_I18N = {
     create_script: "Utwórz skrypt HA",
     tile_confirm: (name) => `Wykonać akcję dla „${name}”?`,
     tile_error: "Nie udało się wykonać akcji kafelka.",
+    heat_off_confirm: (name) => `Wyłączyć „${name}”?`, heat_error: "Nie udało się zmienić ogrzewania.", lower: "Mniej", higher: "Więcej",
     create_script_help: "Otwiera edytor skryptów Home Assistanta. Aby dodać tutaj przycisk, skonfiguruj scenes w karcie.",
     dn_auto: "Dzień/noc: automatycznie", dn_day: "Wymuszony dzień", dn_night: "Wymuszona noc",
     status_title: "Status domu", all_ok: "Wszystko OK", alarm_bang: "Alarm!",
@@ -653,6 +655,7 @@ class LivingHouseCard extends HTMLElement {
     if (!this._root) {
       this._root = this.attachShadow({ mode: "open" });
       this._root.addEventListener("click", (e) => this._click(e));
+      this._root.addEventListener("change", (e) => { const sel = e.target; if (sel && sel.dataset && sel.dataset.hsel !== undefined) this._heatSelect(sel); });
       this._root.addEventListener("pointerdown", (e) => this._edPointerDown(e));
     }
     const c = this._cfg;
@@ -965,26 +968,114 @@ class LivingHouseCard extends HTMLElement {
   _renderHeat() {
     const el = this._el("heat-thermostats");
     if (!el) return;
-    const rows = this._heatingList.map((h) => {
+    const pend = this._hPend || {};
+    const btn = (key, dir, label) => `<button type="button" class="h-btn" data-hstep="${key}:${dir}" aria-label="${label}">${dir < 0 ? "−" : "+"}</button>`;
+    const rows = this._heatingList.map((h, i) => {
       const s = this._s(h.entity);
-      // Thermostats and water heaters (e.g. a boiler) share the same attributes; anything else shows its state.
-      if (!h.entity.startsWith("climate.") && !h.entity.startsWith("water_heater.")) {
-        const value = s && (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" "));
-        return `<button type="button" class="side-entity" data-more="${lhcEsc(h.entity)}">${this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"))}<span>${lhcEsc(this._name(h.entity, h.name))}</span><strong>${lhcEsc(value ?? "—")}</strong></button>`;
+      const dom = h.entity.split(".")[0];
+      const live = !!s && !LHC_BAD.includes(s.state);
+      const ctl = live && h.controls !== false;
+      const name = lhcEsc(this._name(h.entity, h.name));
+      // Thermostats and water heaters (e.g. a boiler): current temperature, target and − / +.
+      if (dom === "climate" || dom === "water_heater") {
+        const heating = this._heating(h.entity);
+        const off = !s || s.state === "off" || LHC_BAD.includes(s.state);
+        const cur = s ? s.attributes.current_temperature : null;
+        const tgt = pend[h.entity] ? pend[h.entity].value : s ? s.attributes.temperature : null;
+        const col = heating ? "#fb7a3c" : off ? "#475569" : "#f5a35c";
+        const icon = this._icon(h.icon || (dom === "water_heater" ? "mdi:water-boiler" : "mdi:heat-wave"), `style="color:${h.icon ? "#60a5fa" : col}"`);
+        const step = ctl && !off && tgt != null;
+        return `<div class="h-row ${heating ? "on" : ""}" data-more="${lhcEsc(h.entity)}">
+          <div class="h-ic">${icon}</div>
+          <div class="h-name">${name}<small class="${pend[h.entity] ? "pend" : ""}">${off ? this._t("off_short") : heating ? this._t("heating_to", this._num(tgt)) : tgt != null ? this._t("target", this._num(tgt)) : this._t("idle")}</small></div>
+          ${step ? btn(i, -1, this._t("lower")) : ""}<div class="h-val">${cur != null ? this._num(cur) + "°C" : "—"}</div>${step ? btn(i, 1, this._t("higher")) : ""}
+        </div>`;
       }
-      const heating = this._heating(h.entity);
-      const off = !s || s.state === "off" || LHC_BAD.includes(s.state);
-      const cur = s ? s.attributes.current_temperature : null;
-      const tgt = s ? s.attributes.temperature : null;
-      const col = heating ? "#fb7a3c" : off ? "#475569" : "#f5a35c";
-      const icon = this._icon(h.icon || "mdi:heat-wave", `style="color:${h.icon ? "#60a5fa" : col}"`);
-      return `<div class="h-row ${heating ? "on" : ""}" data-more="${lhcEsc(h.entity)}">
-        <div class="h-ic">${icon}</div>
-        <div class="h-name">${lhcEsc(this._name(h.entity, h.name))}<small>${off ? this._t("off_short") : heating ? this._t("heating_to", this._num(tgt)) : tgt != null ? this._t("target", this._num(tgt)) : this._t("idle")}</small></div>
-        <div class="h-val">${cur != null ? this._num(cur) + "°C" : "—"}</div>
-      </div>`;
+      const value = s ? (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" ")) : "—";
+      const icon = this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"));
+      // Switches (pump, boiler on/off): power button.
+      if (ctl && (dom === "switch" || dom === "input_boolean")) {
+        const on = s.state === "on";
+        return `<div class="side-entity h-ctl" data-more="${lhcEsc(h.entity)}">${icon}<span>${name}</span>
+          <button type="button" class="power small ${on ? "on" : ""}" data-htoggle="${i}" title="${this._t("toggle_power")}">${this._icon("mdi:power")}</button></div>`;
+      }
+      // Numbers (e.g. boiler set point): value with − / +.
+      if (ctl && (dom === "number" || dom === "input_number")) {
+        const unit = s.attributes.unit_of_measurement || "";
+        const v = pend[h.entity] ? pend[h.entity].value : Number(s.state);
+        const d = (Number(s.attributes.step) || 1) < 1 ? 1 : 0;
+        return `<div class="side-entity h-ctl" data-more="${lhcEsc(h.entity)}">${icon}<span>${name}</span>
+          ${btn(i, -1, this._t("lower"))}<strong class="${pend[h.entity] ? "pend" : ""}">${this._num(v, d)}${unit ? " " + lhcEsc(unit) : ""}</strong>${btn(i, 1, this._t("higher"))}</div>`;
+      }
+      // Selects (e.g. operating mode): option list.
+      if (ctl && (dom === "select" || dom === "input_select") && lhcArr(s.attributes.options).length) {
+        const opts = lhcArr(s.attributes.options).map((o) => `<option value="${lhcEsc(o)}" ${o === s.state ? "selected" : ""}>${lhcEsc(o)}</option>`).join("");
+        return `<div class="side-entity h-ctl" data-more="${lhcEsc(h.entity)}">${icon}<span>${name}</span>
+          <select class="h-sel" data-hsel="${i}" aria-label="${name}">${opts}</select></div>`;
+      }
+      // Sensors and anything else: state only.
+      return `<button type="button" class="side-entity" data-more="${lhcEsc(h.entity)}">${icon}<span>${name}</span><strong>${lhcEsc(value)}</strong></button>`;
     }).join("");
     this._html(el, `<div class="p-title">${this._icon("mdi:radiator", 'class="t-ic amber"')}${this._t("heating")}</div>${rows}`);
+  }
+
+  /* − / + on a heating row: change the target locally, send it once clicking stops. */
+  _heatStep(key) {
+    const [i, dir] = key.split(":").map(Number);
+    const h = this._heatingList[i], s = h && this._s(h.entity);
+    if (!s) return;
+    const dom = h.entity.split(".")[0], a = s.attributes;
+    const temp = dom === "climate" || dom === "water_heater";
+    const step = Number(temp ? a.target_temp_step : a.step) || (dom === "climate" ? 0.5 : 1);
+    const min = Number(temp ? a.min_temp : a.min), max = Number(temp ? a.max_temp : a.max);
+    this._hPend = this._hPend || {};
+    const p = this._hPend[h.entity];
+    const base = p ? p.value : Number(temp ? a.temperature : s.state);
+    if (!Number.isFinite(base)) return;
+    let v = Math.round((base + dir * step) / step) * step;
+    if (Number.isFinite(min)) v = Math.max(min, v);
+    if (Number.isFinite(max)) v = Math.min(max, v);
+    v = Math.round(v * 100) / 100;
+    clearTimeout(p && p.timer);
+    const timer = setTimeout(async () => {
+      try {
+        if (temp) await this._hass.callService(dom, "set_temperature", { entity_id: h.entity, temperature: v });
+        else await this._hass.callService(dom, "set_value", { entity_id: h.entity, value: v });
+      } catch (err) {
+        console.error("living-house-card heating", err);
+        this._fire("hass-notification", { message: this._t("heat_error") });
+      }
+      if (this._hPend && this._hPend[h.entity] && this._hPend[h.entity].timer === timer) delete this._hPend[h.entity];
+      this._renderHeat();
+    }, 900);
+    this._hPend[h.entity] = { value: v, timer };
+    this._renderHeat();
+  }
+
+  async _heatToggle(i) {
+    const h = this._heatingList[Number(i)], s = h && this._s(h.entity);
+    if (!s) return;
+    const dom = h.entity.split(".")[0], on = s.state === "on";
+    // Switching heating off by accident is worse than an extra tap, so ask first (confirm: false skips it).
+    if (on && h.confirm !== false && !window.confirm(this._t("heat_off_confirm", this._name(h.entity, h.name)))) return;
+    try {
+      await this._hass.callService(dom, on ? "turn_off" : "turn_on", { entity_id: h.entity });
+    } catch (err) {
+      console.error("living-house-card heating", err);
+      this._fire("hass-notification", { message: this._t("heat_error") });
+    }
+  }
+
+  async _heatSelect(sel) {
+    const h = this._heatingList[Number(sel.dataset.hsel)], s = h && this._s(h.entity);
+    if (!s || sel.value === s.state) return;
+    try {
+      await this._hass.callService(h.entity.split(".")[0], "select_option", { entity_id: h.entity, option: sel.value });
+    } catch (err) {
+      console.error("living-house-card heating", err);
+      this._fire("hass-notification", { message: this._t("heat_error") });
+      sel.value = s.state;
+    }
   }
 
   _renderAir() {
@@ -1552,7 +1643,7 @@ class LivingHouseCard extends HTMLElement {
   _click(e) {
     const path = e.composedPath();
     const stop = path.indexOf(this._root);
-    const keys = ["fnav", "toggle", "more", "nav", "tile", "room", "scene", "roomlights", "dn", "heatmap", "wake", "edit", "edsel", "eddraw", "edundo", "eddone", "edcopy", "edclose", "close"];
+    const keys = ["fnav", "toggle", "hstep", "htoggle", "hsel", "more", "nav", "tile", "room", "scene", "roomlights", "dn", "heatmap", "wake", "edit", "edsel", "eddraw", "edundo", "eddone", "edcopy", "edclose", "close"];
     const t = (stop >= 0 ? path.slice(0, stop) : path).find((n) => n.dataset && Object.keys(n.dataset).some((k) => keys.includes(k)));
     if (!t) return;
     const d = t.dataset;
@@ -1597,6 +1688,9 @@ class LivingHouseCard extends HTMLElement {
     }
     if (d.scene) return this._runScene(d.scene);
     if (d.tile) return this._runTile(d.tile);
+    if (d.hstep) return this._heatStep(d.hstep);
+    if (d.htoggle !== undefined) return this._heatToggle(d.htoggle);
+    if (d.hsel !== undefined) return; // the option list handles its own change
     if (d.nav) return lhcNavigate(d.nav);
     if (d.more) return this._more(d.more);
   }
@@ -1771,6 +1865,14 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 .h-row.on .h-ic ha-icon{filter:drop-shadow(0 0 6px rgba(251,122,60,.8));animation:pulse 2s ease-in-out infinite}
 .h-name{flex:1;font-size:14px;line-height:1.15}.h-name small{display:block;font-size:11px;color:var(--dim)}
 .h-val{font-size:14px;padding:5px 9px;border-radius:10px;background:rgba(4,9,20,.45);border:1px solid var(--line);min-width:60px;text-align:center}
+.h-btn{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:rgba(4,9,20,.35);color:inherit;font:600 15px/1 inherit;cursor:pointer;display:grid;place-items:center;padding:0}
+.h-btn:hover{background:rgba(255,255,255,.08)}
+.h-row .h-btn{margin:0 -4px}
+.h-ctl{cursor:pointer}
+.h-ctl strong{flex:none;min-width:56px;text-align:center}
+.pend{color:#fbbf24!important}
+.power.small{width:30px;height:30px;flex:none;background:none;cursor:pointer}.power.small ha-icon{--mdc-icon-size:18px}
+.h-sel{flex:none;max-width:48%;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:rgba(4,9,20,.55);color:inherit;font:12px inherit}
 
 .a-row{display:flex;align-items:center;gap:12px;padding:6px 0}
 .a-row+.a-row{border-top:1px solid var(--line)}
@@ -2030,7 +2132,7 @@ const LHC_ED_TXT = {
   },
 };
 // Entities the heating picker offers: thermostats, water heaters / boilers and their sensors and switches.
-const LHC_HEATING_DOMAINS = ["climate", "water_heater", "sensor", "binary_sensor", "switch", "input_boolean", "number", "input_number", "select"];
+const LHC_HEATING_DOMAINS = ["climate", "water_heater", "sensor", "binary_sensor", "switch", "input_boolean", "number", "input_number", "select", "input_select"];
 const LHC_PRESET_NAMES = {
   "2-bedrooms": ["2 bedrooms", "2 sypialnie"], "3-bedrooms": ["3 bedrooms", "3 sypialnie"],
   basement: ["2 bedrooms + basement", "2 sypialnie + piwnica"], attic: ["2 bedrooms + attic", "2 sypialnie + poddasze"],
@@ -4084,5 +4186,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.5.1 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.5.2 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();

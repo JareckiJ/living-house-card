@@ -135,6 +135,14 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 .h-row.on .h-ic ha-icon{filter:drop-shadow(0 0 6px rgba(251,122,60,.8));animation:pulse 2s ease-in-out infinite}
 .h-name{flex:1;font-size:14px;line-height:1.15}.h-name small{display:block;font-size:11px;color:var(--dim)}
 .h-val{font-size:14px;padding:5px 9px;border-radius:10px;background:rgba(4,9,20,.45);border:1px solid var(--line);min-width:60px;text-align:center}
+.h-btn{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:rgba(4,9,20,.35);color:inherit;font:600 15px/1 inherit;cursor:pointer;display:grid;place-items:center;padding:0}
+.h-btn:hover{background:rgba(255,255,255,.08)}
+.h-row .h-btn{margin:0 -4px}
+.h-ctl{cursor:pointer}
+.h-ctl strong{flex:none;min-width:56px;text-align:center}
+.pend{color:#fbbf24!important}
+.power.small{width:30px;height:30px;flex:none;background:none;cursor:pointer}.power.small ha-icon{--mdc-icon-size:18px}
+.h-sel{flex:none;max-width:48%;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:rgba(4,9,20,.55);color:inherit;font:12px inherit}
 
 .a-row{display:flex;align-items:center;gap:12px;padding:6px 0}
 .a-row+.a-row{border-top:1px solid var(--line)}
