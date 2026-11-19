@@ -65,8 +65,10 @@ Then open <http://localhost:8000/demo/>.
 
 ### HACS (recommended)
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/krystianokris/living-house-card`, category **Dashboard**.
-2. Install **Living House Card** and reload the browser (Ctrl+Shift+R).
+1. Open HACS and search for **Living House Card**.
+2. Open the result, select **Download**, then reload the browser (Ctrl+Shift+R).
+
+If the card is missing from the default catalog, open HACS → ⋮ → **Custom repositories** and add `https://github.com/krystianokris/living-house-card` as a **Dashboard** repository. Then follow the steps above.
 
 ### Manual
 

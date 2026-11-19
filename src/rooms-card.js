@@ -24,7 +24,7 @@ class LivingRoomsCard extends HTMLElement {
     if (this._root) { this._root.innerHTML = ""; this._root = null; this.shadowRoot && (this.shadowRoot.innerHTML = ""); }
   }
   _t(k, a) { return lhcT(this._lang || "en", k, a); }
-  _m(g, k, f) { return lhcMap(this._lang || "en", g, k, f); }
+  _m(g, k, f) { return lhcEsc(lhcMap(this._lang || "en", g, k, f)); }
 
   _normalize() {
     const ent = (x) => (typeof x === "string" ? { entity: x } : x || {});
@@ -118,7 +118,7 @@ class LivingRoomsCard extends HTMLElement {
   _ok(id) { const s = this._s(id); return !!s && !LHC_BAD.includes(s.state); }
   _on(id) { const s = this._s(id); return !!s && s.state === "on"; }
   _num(v, d = 1) { const n = Number(v); return v !== null && v !== "" && v !== undefined && Number.isFinite(n) ? n.toFixed(d) : "—"; }
-  _icon(i, extra = "") { return `<ha-icon icon="${i}" ${extra}></ha-icon>`; }
+  _icon(i, extra = "") { return `<ha-icon icon="${lhcEsc(i)}" ${extra}></ha-icon>`; }
   _call(d, s, data) { return this._hass.callService(d, s, data); }
   _name(id, name) { return lhcEsc(name || (this._s(id) && this._s(id).attributes.friendly_name) || id); }
   _ids(r) {
@@ -224,8 +224,8 @@ class LivingRoomsCard extends HTMLElement {
       </header>
       <div class="bento" style="--rows:${rows}">
         ${this._rooms.map((r, i) => `
-          <article class="tile t-${r.id} sz-${sizes[i]} rise" style="--d:${i + 1};--acc:${r.accent}" ${r.link ? `data-nav="${lhcEsc(r.link)}"` : `data-open="${r.id}"`}>
-            <div class="t-img" style="${this._img(r) ? `background-image:url('${lhcEsc(this._img(r))}')` : ""}"></div>
+          <article class="tile t-${r.id} sz-${lhcEsc(sizes[i])} rise" style="--d:${i + 1};--acc:${r.accent}" ${r.link ? `data-nav="${lhcEsc(r.link)}"` : `data-open="${r.id}"`}>
+            <div class="t-img" style="${this._img(r) ? `background-image:${lhcEsc(lhcCssUrl(this._img(r)))}` : ""}"></div>
             <div class="t-shade"></div><div class="t-glare"></div>
             <div class="t-top">
               <span class="t-ic glass">${this._icon(r.icon)}</span>
@@ -361,7 +361,7 @@ class LivingRoomsCard extends HTMLElement {
     room.hidden = false;
     hub.hidden = true;
     hub.classList.remove("back-in");
-    this._el("bgimg").style.backgroundImage = this._img(r) ? `url('${lhcEsc(this._img(r))}')` : "";
+    this._el("bgimg").style.backgroundImage = this._img(r) ? lhcCssUrl(this._img(r)) : "";
     if (!this._isFit()) window.scrollTo({ top: 0 });
     room.classList.remove("enter", "slide-l", "slide-r");
     void room.offsetWidth;
@@ -370,7 +370,7 @@ class LivingRoomsCard extends HTMLElement {
       const end = hero.getBoundingClientRect();
       const ghost = document.createElement("div");
       ghost.className = "ghost";
-      ghost.style.backgroundImage = `url('${lhcEsc(this._img(r))}')`;
+      ghost.style.backgroundImage = lhcCssUrl(this._img(r));
       this._root.querySelector(".page").appendChild(ghost);
       room.classList.add("enter-flip");
       const anim = ghost.animate([
@@ -452,7 +452,7 @@ class LivingRoomsCard extends HTMLElement {
       <div class="rgrid ${cC ? "" : "two"}">
         <div class="col colA">
           <div class="hero" style="--acc:${r.accent};order:0">
-            <div class="hero-img" style="${this._img(r) ? `background-image:url('${lhcEsc(this._img(r))}')` : ""}"></div>
+            <div class="hero-img" style="${this._img(r) ? `background-image:${lhcEsc(lhcCssUrl(this._img(r)))}` : ""}"></div>
             <div class="hero-shade"></div>
             <div class="hero-body">
               <div class="hero-ic">${this._icon(r.icon)}</div>
@@ -558,9 +558,9 @@ class LivingRoomsCard extends HTMLElement {
     const pend = this._pending[`t:${id}`];
     const tgt = pend != null ? pend : a.temperature;
     const action = a.hvac_action;
-    const modes = (a.hvac_modes || []).filter((m) => LRC_HVAC_ICON[m]);
+    const modes = (a.hvac_modes || []).filter((m) => Object.hasOwn(LRC_HVAC_ICON, m));
     const modeChips = modes.map((m) => `<button class="mchip ${s.state === m ? "on" : ""}" data-hvac="${lhcEsc(id)}" data-v="${m}">${this._icon(LRC_HVAC_ICON[m])}${this._m("hvac", m)}</button>`).join("");
-    const actTxt = !avail ? this._t("st_offline") : off ? this._m("action", "off") : action ? this._m("action", action, lhcEsc(action)) : this._m("hvac", s.state, s.state);
+    const actTxt = !avail ? this._t("st_offline") : off ? this._m("action", "off") : action ? this._m("action", action, action) : this._m("hvac", s.state, s.state);
     const heating = action === "heating", cooling = action === "cooling";
     const hasT = tgt != null && Number.isFinite(Number(tgt));
     if (kind === "main" || kind === "ac") {
@@ -615,12 +615,12 @@ class LivingRoomsCard extends HTMLElement {
     const title = a.media_title || (on ? a.app_name || "" : "");
     const sub = [a.media_artist || a.media_series_title, a.app_name && a.media_title ? a.app_name : ""].filter(Boolean).join(" · ");
     const vpct = Math.round((vol || 0) * 100);
-    const st = this._m("media", s.state, lhcEsc(s.state));
+    const st = this._m("media", s.state, s.state);
     return `
       <div class="md glass ${playing ? "playing" : ""} ${!on ? "is-off" : ""}">
-        ${pic ? `<div class="md-bg" style="background-image:url('${lhcEsc(pic)}')"></div>` : ""}
+        ${pic ? `<div class="md-bg" style="background-image:${lhcEsc(lhcCssUrl(pic))}"></div>` : ""}
         <div class="md-row">
-          <div class="md-art" ${pic ? `style="background-image:url('${lhcEsc(pic)}')"` : ""}>${pic ? "" : this._icon(speaker ? "mdi:speaker" : "mdi:television-classic")}${playing ? `<span class="eq"><i></i><i></i><i></i></span>` : ""}</div>
+          <div class="md-art" ${pic ? `style="background-image:${lhcEsc(lhcCssUrl(pic))}"` : ""}>${pic ? "" : this._icon(speaker ? "mdi:speaker" : "mdi:television-classic")}${playing ? `<span class="eq"><i></i><i></i><i></i></span>` : ""}</div>
           <div class="md-txt">
             <div class="md-name">${this._name(id, nm)}</div>
             <div class="md-title">${lhcEsc(title) || st}</div>
@@ -644,7 +644,7 @@ class LivingRoomsCard extends HTMLElement {
       const kind = this._kind(id, k);
       const avail = !LHC_BAD.includes(s.state);
       const on = s.state === "on";
-      let icon = "mdi:access-point", val = avail ? `${lhcEsc(s.state)} ${s.attributes.unit_of_measurement || ""}` : this._t("st_offline"), cls = "";
+      let icon = "mdi:access-point", val = avail ? `${lhcEsc(s.state)} ${lhcEsc(s.attributes.unit_of_measurement)}` : this._t("st_offline"), cls = "";
       if (kind === "window") { icon = on ? "mdi:window-open-variant" : "mdi:window-closed-variant"; val = on ? this._t("open") : this._t("closed"); cls = on ? "warn" : "ok"; }
       if (kind === "leak") { icon = on ? "mdi:water-alert" : "mdi:water-check-outline"; val = on ? this._t("leak") : this._t("dry"); cls = on ? "bad" : "ok"; }
       if (kind === "co") { icon = on ? "mdi:molecule-co" : "mdi:shield-check-outline"; val = on ? this._t("co") : this._t("safe"); cls = on ? "bad" : "ok"; }
@@ -652,7 +652,7 @@ class LivingRoomsCard extends HTMLElement {
       if (kind === "binary") { icon = on ? "mdi:checkbox-blank-circle" : "mdi:checkbox-blank-circle-outline"; val = on ? this._t("detected") : this._t("clear"); }
       if (kind === "battery") { const n = Number(s.state); icon = n > 60 ? "mdi:battery-high" : n > 25 ? "mdi:battery-medium" : "mdi:battery-low"; val = `${this._num(s.state, 0)}%`; cls = n > 25 ? "ok" : "warn"; }
       if (kind === "pm") { const n = Number(s.state); icon = "mdi:molecule"; val = `${this._num(s.state, 0)} µg/m³`; cls = n <= 12 ? "ok" : n <= 35 ? "warn" : "bad"; }
-      if (kind === "aq") { icon = "mdi:leaf"; val = this._m("aq_states", s.state, lhcEsc(s.state)); cls = LRC_AQ_OK.includes(s.state) ? "ok" : ""; }
+      if (kind === "aq") { icon = "mdi:leaf"; val = this._m("aq_states", s.state, s.state); cls = LRC_AQ_OK.includes(s.state) ? "ok" : ""; }
       if (!avail) cls = "dim";
       return `<button class="sens glass ${cls}" data-more="${lhcEsc(id)}">${this._icon(icon)}<div><div class="s-name">${this._name(id, nm)}</div><div class="s-val">${val}</div></div></button>`;
     }).join("")}</div>`;
@@ -664,7 +664,7 @@ class LivingRoomsCard extends HTMLElement {
       const f = this._s(d.fan);
       if (!f) return "";
       const on = f.state === "on";
-      const pct = f.attributes.percentage ?? 0;
+      const pct = Number(f.attributes.percentage) || 0;
       const pm = Number(this._s(d.pm)?.state);
       const flt = Number(this._s(d.filter)?.state);
       const presets = f.attributes.preset_modes || [];
@@ -686,11 +686,11 @@ class LivingRoomsCard extends HTMLElement {
     if (d.type === "feeder") {
       const st = this._s(d.status)?.state;
       const n = this._s(d.manual);
-      const max = n ? n.attributes.max || 10 : 10;
+      const max = Number(n?.attributes.max) || 10;
       const portions = this._pending[`p:${d.manual}`] ?? 1;
       return `
         <div class="dev glass feeder">
-          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("feeder"))}</div><div class="dev-sub">${st ? this._m("feeder_st", st, lhcEsc(st)) : "—"}</div></div></div>
+          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("feeder"))}</div><div class="dev-sub">${st ? this._m("feeder_st", st, st) : "—"}</div></div></div>
           ${d.manual ? `<div class="feed">
             <div class="stepper big"><button class="sbtn" data-portion="${lhcEsc(d.manual)}" data-v="-1" data-max="${max}">${this._icon("mdi:minus")}</button><b>${portions}</b><span>${this._t("portions", portions)}</span><button class="sbtn" data-portion="${lhcEsc(d.manual)}" data-v="1" data-max="${max}">${this._icon("mdi:plus")}</button></div>
             <button class="cta" data-feed="${lhcEsc(d.manual)}">${this._icon("mdi:food-drumstick-outline")}${this._t("feed_now")}</button>
@@ -702,7 +702,7 @@ class LivingRoomsCard extends HTMLElement {
       const st = this._s(d.status)?.state;
       return `
         <div class="dev glass litter">
-          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("litter"))}</div><div class="dev-sub">${st ? this._m("litter_st", st, lhcEsc(st)) : "—"}</div></div>
+          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("litter"))}</div><div class="dev-sub">${st ? this._m("litter_st", st, st) : "—"}</div></div>
             ${d.clean ? `<button class="cta sm" data-clean="${lhcEsc(d.clean)}">${this._icon("mdi:broom")}${this._t("clean")}</button>` : ""}</div>
           ${d.switches.length ? `<div class="toggles">${sws(d.switches)}</div>` : ""}
         </div>`;
@@ -714,12 +714,12 @@ class LivingRoomsCard extends HTMLElement {
       const avail = s && !LHC_BAD.includes(s.state);
       const running = avail && s.state === "running";
       const rem = Number(this._s(d.remaining)?.state);
-      const extra = washer ? (this._ok(d.temp) ? (this._s(d.temp).state === "cold" ? this._t("cold") : this._s(d.temp).state + "°C") : "") : (this._ok(d.program) ? this._m("dry_prog", this._s(d.program).state, this._s(d.program).state.replace(/_/g, " ")) : "");
+      const extra = washer ? (this._ok(d.temp) ? (this._s(d.temp).state === "cold" ? this._t("cold") : lhcEsc(this._s(d.temp).state) + "°C") : "") : (this._ok(d.program) ? this._m("dry_prog", this._s(d.program).state, this._s(d.program).state.replace(/_/g, " ")) : "");
       const warns = !washer ? [[d.water, this._t("waterbox_full")], [d.filter, this._t("empty_filter")]].filter(([e]) => e && this._on(e)) : [];
       return `
         <div class="dev glass appl ${running ? "running" : ""} ${!avail ? "is-off" : ""}">
-          <div class="dev-hd">${this._icon(washer ? "mdi:washing-machine" : "mdi:tumble-dryer", `class="dev-ic ${running ? "spin" : ""}"`)}<div><div class="dev-name">${lhcEsc(d.name || this._t(washer ? "washer" : "dryer"))}</div><div class="dev-sub">${avail ? this._m(washer ? "washer_st" : "dryer_st", s.state, lhcEsc(s.state)) : this._t("appl_offline")}</div></div></div>
-          ${avail ? `<div class="appl-body"><div class="rem"><b>${Number.isFinite(rem) && rem > 0 ? rem : "—"}</b><span>${this._t("min_left")}</span></div>${extra ? `<div class="tag">${this._icon(washer ? "mdi:thermometer" : "mdi:tune-variant")}${lhcEsc(extra)}</div>` : ""}</div>` : ""}
+          <div class="dev-hd">${this._icon(washer ? "mdi:washing-machine" : "mdi:tumble-dryer", `class="dev-ic ${running ? "spin" : ""}"`)}<div><div class="dev-name">${lhcEsc(d.name || this._t(washer ? "washer" : "dryer"))}</div><div class="dev-sub">${avail ? this._m(washer ? "washer_st" : "dryer_st", s.state, s.state) : this._t("appl_offline")}</div></div></div>
+          ${avail ? `<div class="appl-body"><div class="rem"><b>${Number.isFinite(rem) && rem > 0 ? rem : "—"}</b><span>${this._t("min_left")}</span></div>${extra ? `<div class="tag">${this._icon(washer ? "mdi:thermometer" : "mdi:tune-variant")}${extra}</div>` : ""}</div>` : ""}
           ${warns.map(([, t]) => `<div class="warnrow">${this._icon("mdi:alert-outline")}${t}</div>`).join("")}
         </div>`;
     }
@@ -759,7 +759,7 @@ class LivingRoomsCard extends HTMLElement {
       if (!f) return "";
       const a = f.attributes, empty = a.empty || f.state === "Empty";
       const col = String(a.color || "#000000").slice(0, 7);
-      return `<div class="fil ${a.active ? "on" : ""} ${empty ? "empty" : ""}" title="${lhcEsc(f.state)}"><i style="background:${empty ? "transparent" : col}"></i><span>${empty ? this._t("pr_empty") : lhcEsc(a.type || f.state)}</span></div>`;
+      return `<div class="fil ${a.active ? "on" : ""} ${empty ? "empty" : ""}" title="${lhcEsc(f.state)}"><i style="background:${empty ? "transparent" : lhcEsc(col)}"></i><span>${empty ? this._t("pr_empty") : lhcEsc(a.type || f.state)}</span></div>`;
     }).join("");
     const btn = (id, icon, label, cls = "") => (id && S(id) && S(id).state !== "unavailable" ? `<button class="mchip ${cls}" data-press="${lhcEsc(id)}" ${cls === "danger" ? 'data-confirm="1"' : ""}>${this._icon(icon)}${label}</button>` : "");
     const light = S(d.light);
@@ -767,7 +767,7 @@ class LivingRoomsCard extends HTMLElement {
     return `
       <div class="dev glass printer ${active ? "printing" : ""} ${st === "failed" ? "failed" : ""} ${!avail ? "is-off" : ""}">
         <div class="dev-hd">${this._icon("mdi:printer-3d-nozzle", `class="dev-ic ${st === "running" ? "pulse-ic" : ""}"`)}<div><div class="dev-name">${lhcEsc(d.name || this._t("printer"))}</div>
-          <div class="dev-sub">${this._m("pr_status", st, lhcEsc(st))}${stageTxt ? ` · ${lhcEsc(stageTxt)}` : ""}</div></div>
+          <div class="dev-sub">${this._m("pr_status", st, st)}${stageTxt ? ` · ${stageTxt}` : ""}</div></div>
           ${light ? `<button class="power ${light.state === "on" ? "on" : ""}" data-toggle="${lhcEsc(d.light)}" title="${this._t("pr_light")}">${this._icon(light.state === "on" ? "mdi:lightbulb-on" : "mdi:lightbulb-outline")}</button>` : ""}
         </div>
         <div class="pr-body">

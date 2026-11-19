@@ -61,8 +61,10 @@ Otwórz <http://localhost:8000/demo/> – udawane urządzenia, wszystko da się 
 
 ### HACS (zalecane)
 
-1. HACS → ⋮ → **Niestandardowe repozytoria** → dodaj `https://github.com/krystianokris/living-house-card`, kategoria **Dashboard**.
-2. Zainstaluj **Living House Card** i odśwież przeglądarkę (Ctrl+Shift+R).
+1. Otwórz HACS i wyszukaj **Living House Card**.
+2. Otwórz wynik, wybierz **Pobierz** i odśwież przeglądarkę (Ctrl+Shift+R).
+
+Jeśli karty nie ma w domyślnym katalogu, otwórz HACS → ⋮ → **Niestandardowe repozytoria** i dodaj `https://github.com/krystianokris/living-house-card` w kategorii **Dashboard**. Następnie wykonaj powyższe kroki.
 
 ### Ręcznie
 

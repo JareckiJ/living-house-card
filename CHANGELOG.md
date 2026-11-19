@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 – Safe HTML rendering
+
+- Escape entity states, units, room IDs and icons in the three card templates.
+- Lead with catalog search in the HACS installation instructions.
+
 ## 0.5.2 – Heating controls
 
 - Heating rows get controls that match the entity type: − / + for thermostats, water heaters and numbers, a power button for switches, a list for selects. Sensors stay read-only.

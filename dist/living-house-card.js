@@ -1,19 +1,23 @@
-/*! Living House Card v0.5.2 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.5.3 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.5.2";
+const LHC_VERSION = "0.5.3";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
 const lhcEsc = (x) => String(x ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+// Quote URLs for CSS before escaping any surrounding HTML attribute.
+const lhcCssUrl = (value) => {
+  const url = String(value ?? "").replace(/['\\\u0000-\u001f\u007f]/g, (char) => "\\" + char.charCodeAt(0).toString(16) + " ");
+  return `url('${url}')`;
+};
 const lhcArr = (x) => (x == null ? [] : Array.isArray(x) ? x : [x]);
 const lhcUniq = (a) => [...new Set(a.filter(Boolean))];
 
 /* "#f59e0b" | "245,158,11" | [245,158,11] -> "245,158,11" */
 function lhcRgb(c, fallback = "96,165,250") {
   if (!c) return fallback;
-  if (Array.isArray(c)) return c.join(",");
   const s = String(c).trim();
   const m = s.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (m) {
@@ -197,7 +201,7 @@ function lhcT(lang, key, arg) {
 }
 function lhcMap(lang, group, key, fallback) {
   const g = (LHC_I18N[lang] && LHC_I18N[lang][group]) || LHC_I18N.en[group] || {};
-  return g[key] ?? fallback ?? key;
+  return Object.hasOwn(g, key) ? g[key] : fallback ?? key;
 }
 
 /* ---------- akcje (sceny) ----------
@@ -563,7 +567,7 @@ class LivingHouseCard extends HTMLElement {
     if (!iso) return "—";
     try { return new Date(iso).toLocaleTimeString(this._lang === "pl" ? "pl-PL" : undefined, { hour: "2-digit", minute: "2-digit", timeZone: this._hass.config.time_zone }); } catch (e) { return "—"; }
   }
-  _icon(i, extra = "") { return `<ha-icon icon="${i}" ${extra}></ha-icon>`; }
+  _icon(i, extra = "") { return `<ha-icon icon="${lhcEsc(i)}" ${extra}></ha-icon>`; }
   _roomTemp(r) {
     if (r.temp) return this._val(r.temp);
     if (r.climateTemp) { const s = this._s(r.climateTemp); return this._num(s && s.attributes.current_temperature); }
@@ -659,11 +663,11 @@ class LivingHouseCard extends HTMLElement {
       this._root.addEventListener("pointerdown", (e) => this._edPointerDown(e));
     }
     const c = this._cfg;
-    const img = c.image ? lhcEsc(c.image) : "";
+    const img = lhcEsc(lhcCssUrl(c.image));
     const [h0, h1] = c.heatmap_range || [16, 26];
     this._root.innerHTML = `
       <style>${LHC_HOUSE_STYLE}</style>
-      <div class="outer fluid" style="--img:url('${img}')">
+      <div class="outer fluid" style="--img:${img}">
         <div class="bg">
           <div class="night"></div>
           <div class="blur-img"></div>
@@ -712,7 +716,7 @@ class LivingHouseCard extends HTMLElement {
                 <svg class="edsvg" id="edsvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
               </div>
               <button class="hm-btn glass ${this._heatmap ? "on" : ""}" id="hmbtn" data-heatmap="1" title="${this._t("heatmap")}">${this._icon("mdi:thermometer-lines")}<span>${this._t("heatmap")}</span></button>
-              <div class="legend glass" id="legend"><span>${h0}°</span><i></i><span>${h1}°</span></div>
+              <div class="legend glass" id="legend"><span>${lhcEsc(h0)}°</span><i></i><span>${lhcEsc(h1)}°</span></div>
               <div class="pop glass" id="pop" hidden></div>
               <div class="edpanel glass" id="edpanel" hidden></div>
             </div>
@@ -751,15 +755,15 @@ class LivingHouseCard extends HTMLElement {
 
   /* stałe warstwy na obrazie: cień pokoju, kolor LED, poświata TV, ekran TV */
   _layersHtml() {
-    const poly = (pts) => `polygon(${pts.map(([x, y]) => `${x}% ${y}%`).join(",")})`;
-    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${g.w}%;height:${g.h}%`;
+    const poly = (pts) => `polygon(${pts.map(([x, y]) => `${Number(x)}% ${Number(y)}%`).join(",")})`;
+    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${Number(g.w)}%;height:${Number(g.h)}%`;
     const shaped = this._rooms.filter((r) => r.shape);
     return `
-      <div class="shades">${shaped.filter((r) => (this._lights[r.id] || []).length).map((r) => `<div class="shade" data-shade="${r.id}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
-      <div class="leds">${shaped.map((r) => `<div class="led" data-led="${r.id}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
+      <div class="shades">${shaped.filter((r) => (this._lights[r.id] || []).length).map((r) => `<div class="shade" data-shade="${lhcEsc(r.id)}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
+      <div class="leds">${shaped.map((r) => `<div class="led" data-led="${lhcEsc(r.id)}" style="clip-path:${poly(r.shape)}"></div>`).join("")}</div>
       <div class="tvs">${this._rooms.filter((r) => r.tv).map((r) => `
-        <div class="tvglow-clip" ${r.shape ? `style="clip-path:${poly(r.shape)}"` : ""}><div class="tvglow" data-tv="${r.id}" style="${box(r.tv)}"></div></div>
-        ${r.tv.screen ? `<div class="tvscreen" data-screen="${r.id}" style="clip-path:${poly(r.tv.screen)}"></div>` : ""}`).join("")}</div>`;
+        <div class="tvglow-clip" ${r.shape ? `style="clip-path:${poly(r.shape)}"` : ""}><div class="tvglow" data-tv="${lhcEsc(r.id)}" style="${box(r.tv)}"></div></div>
+        ${r.tv.screen ? `<div class="tvscreen" data-screen="${lhcEsc(r.id)}" style="clip-path:${poly(r.tv.screen)}"></div>` : ""}`).join("")}</div>`;
   }
 
   _roomLevel(r) {
@@ -785,21 +789,21 @@ class LivingHouseCard extends HTMLElement {
   _updateLayers() {
     const root = this._root, day = this._dayFactor();
     this._rooms.forEach((r) => {
-      const sh = root.querySelector(`[data-shade="${r.id}"]`);
+      const sh = root.querySelector(`[data-shade="${CSS.escape(r.id)}"]`);
       if (sh) {
         let dark = 0.84 * Math.pow(1 - this._roomLevel(r), 1.1) * (1 - 0.55 * day);
         if (this._tvOn(r)) dark *= 0.82;
         sh.style.opacity = this._edit ? "0" : dark.toFixed(3);
       }
-      const led = root.querySelector(`[data-led="${r.id}"]`);
+      const led = root.querySelector(`[data-led="${CSS.escape(r.id)}"]`);
       if (led) {
         const c = this._ledColor(r);
         led.style.opacity = c ? "1" : "0";
         if (c) led.style.setProperty("--led", c.join(","));
       }
-      const tvg = root.querySelector(`[data-tv="${r.id}"]`);
+      const tvg = root.querySelector(`[data-tv="${CSS.escape(r.id)}"]`);
       if (tvg) tvg.classList.toggle("on", this._tvOn(r));
-      const scr = root.querySelector(`[data-screen="${r.id}"]`);
+      const scr = root.querySelector(`[data-screen="${CSS.escape(r.id)}"]`);
       if (scr) scr.classList.toggle("off", !this._tvOn(r));
     });
   }
@@ -859,7 +863,7 @@ class LivingHouseCard extends HTMLElement {
           ? (state ? this._hass.formatEntityState(state) : "—")
           : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
         return `<button type="button" class="side-entity" data-tile="${side}:${index}">
-          ${this._icon(lhcEsc(icon || state?.attributes.icon || "mdi:information-outline"))}
+          ${this._icon(icon || state?.attributes.icon || "mdi:information-outline")}
           <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
         </button>`;
       }).join("");
@@ -909,7 +913,7 @@ class LivingHouseCard extends HTMLElement {
         </div>
       </div>
       <div class="w-grid">
-        <div>${this._icon("mdi:weather-windy", 'class="ic blue"')}${this._num(a.wind_speed, 0)} ${a.wind_speed_unit || "km/h"}</div>
+        <div>${this._icon("mdi:weather-windy", 'class="ic blue"')}${this._num(a.wind_speed, 0)} ${lhcEsc(a.wind_speed_unit || "km/h")}</div>
         <div>${this._icon("mdi:water-outline", 'class="ic blue"')}${this._num(a.humidity, 0)}%</div>
         <div>${this._icon("mdi:weather-sunset-up", 'class="ic amber"')}${this._time(sun && sun.attributes.next_rising)}</div>
         <div>${this._icon("mdi:weather-sunset-down", 'class="ic amber"')}${this._time(sun && sun.attributes.next_setting)}</div>
@@ -934,16 +938,16 @@ class LivingHouseCard extends HTMLElement {
     if (this._allLights.length) rows.push(row("mdi:lightbulb-outline", lightsOn ? "#facc15" : "#64748b", this._t("lights"), lightsOn ? this._t("lights_on", lightsOn) : this._t("all_off"), `data-room="__lights"`));
     if (this._heatingList.length) rows.push(row("mdi:radiator", heatOn ? "#fb923c" : "#64748b", this._t("heating"), heatOn ? this._t("heating_active", heatOn) : this._t("inactive"), c.main_thermostat ? `data-more="${lhcEsc(c.main_thermostat)}"` : ""));
     if (c.ventilation) rows.push(row("mdi:fan", vent && vent.state === "on" ? "#38bdf8" : "#64748b", this._t("ventilation"), vent ? (vent.state === "on" ? this._t("running") : vent.state === "off" ? this._t("off_f") : this._t("no_data")) : "—", `data-more="${lhcEsc(c.ventilation)}"`));
-    if (c.alarm) rows.push(row("mdi:shield-check-outline", al ? LHC_ALARM_COLOR[al.state] || "#4ade80" : "#94a3b8", this._t("security"), al ? lhcMap(this._lang, "alarm", al.state, al.state) : this._t("none"), `data-more="${lhcEsc(c.alarm)}"`));
+    if (c.alarm) rows.push(row("mdi:shield-check-outline", al ? LHC_ALARM_COLOR[al.state] || "#4ade80" : "#94a3b8", this._t("security"), al ? lhcEsc(lhcMap(this._lang, "alarm", al.state)) : this._t("none"), `data-more="${lhcEsc(c.alarm)}"`));
     if (c.pm25) rows.push(row("mdi:leaf", air[1], this._t("air_quality"), air[0], `data-more="${lhcEsc(c.pm25)}"`));
     if (c.printer && c.printer.status) {
       const p = c.printer, ps = this._s(p.status), st = ps ? ps.state : "unknown";
       const prog = Math.round(Number(this._s(p.progress) && this._s(p.progress).state) || 0);
       const left = lhcDuration(this._s(p.remaining));
-      const val = st === "running" ? `${this._t("pr_printing", prog)}${left ? ` · ${left}` : ""}` : lhcMap(this._lang, "pr_status", st, st);
+      const val = st === "running" ? `${this._t("pr_printing", prog)}${left ? ` · ${left}` : ""}` : lhcEsc(lhcMap(this._lang, "pr_status", st));
       const col = st === "running" ? "#22d3ee" : st === "failed" ? "#f87171" : st === "pause" ? "#facc15" : st === "finish" ? "#4ade80" : "#64748b";
       const go = p.page && c.rooms_page ? `data-nav="${lhcEsc(c.rooms_page)}#${lhcEsc(p.page)}"` : `data-more="${lhcEsc(p.progress || p.status)}"`;
-      rows.push(row(st === "failed" ? "mdi:printer-3d-nozzle-alert" : "mdi:printer-3d-nozzle", col, p.name || this._t("printer"), val, go));
+      rows.push(row(st === "failed" ? "mdi:printer-3d-nozzle-alert" : "mdi:printer-3d-nozzle", col, lhcEsc(p.name || this._t("printer")), val, go));
     }
     const changed = this._html(this._el("status"), `
       <div class="p-title">${this._t("status_title")}</div>
@@ -992,7 +996,7 @@ class LivingHouseCard extends HTMLElement {
         </div>`;
       }
       const value = s ? (this._hass.formatEntityState?.(s) ?? [s.state, s.attributes.unit_of_measurement].filter(Boolean).join(" ")) : "—";
-      const icon = this._icon(lhcEsc(h.icon || s?.attributes.icon || "mdi:radiator"));
+      const icon = this._icon(h.icon || s?.attributes.icon || "mdi:radiator");
       // Switches (pump, boiler on/off): power button.
       if (ctl && (dom === "switch" || dom === "input_boolean")) {
         const on = s.state === "on";
@@ -1127,7 +1131,7 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _renderHouse() {
-    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${g.w}%;height:${g.h}%`;
+    const box = (g) => `left:${g.x - g.w / 2}%;top:${g.y - g.h / 2}%;width:${Number(g.w)}%;height:${Number(g.h)}%`;
     if (this._heatmap) {
       this._html(this._el("glows"), this._rooms.filter((r) => r.glow).map((r) => {
         const t = this._roomTempNum(r);
@@ -1141,9 +1145,9 @@ class LivingHouseCard extends HTMLElement {
 
     this._html(this._el("chips"), this._rooms.map((r) => {
       const pos = `left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%`;
-      const ed = this._edit ? `<i class="rz" data-rz="${r.id}"></i>` : "";
+      const ed = this._edit ? `<i class="rz" data-rz="${lhcEsc(r.id)}"></i>` : "";
       const sel = this._edit && this._sel === r.id ? "sel" : "";
-      if (r.label) return `<div class="chip glass label ${sel}" style="${pos}" data-chip="${r.id}">${this._icon(r.icon, 'class="c-ic blue"')}<span class="c-name">${lhcEsc(r.name)}</span><span class="dot"></span>${ed}</div>`;
+      if (r.label) return `<div class="chip glass label ${sel}" style="${pos}" data-chip="${lhcEsc(r.id)}">${this._icon(r.icon, 'class="c-ic blue"')}<span class="c-name">${lhcEsc(r.name)}</span><span class="dot"></span>${ed}</div>`;
       const L = this._lights[r.id] || [];
       const lit = L.some((id) => this._on(id));
       const heat = (r.heat || []).some((id) => this._heating(id));
@@ -1165,7 +1169,7 @@ class LivingHouseCard extends HTMLElement {
       const occ = r.presence && this._on(r.presence);
       const tNum = this._roomTempNum(r);
       const hmStyle = this._heatmap && Number.isFinite(tNum) ? `;--h:${this._heatHue(tNum).toFixed(0)}` : "";
-      return `<button class="chip glass ${lit ? "lit" : ""} ${heat ? "heat" : ""} ${hmStyle ? "hmc" : ""} ${sel}" style="${pos}${hmStyle}" data-room="${r.id}" data-chip="${r.id}">
+      return `<button class="chip glass ${lit ? "lit" : ""} ${heat ? "heat" : ""} ${hmStyle ? "hmc" : ""} ${sel}" style="${pos}${hmStyle}" data-room="${lhcEsc(r.id)}" data-chip="${lhcEsc(r.id)}">
         ${heat || occ ? `<span class="ping ${heat ? "hot" : "mint"}"></span>` : ""}
         <div class="c-top">${this._icon(icon, `class="${iconCls}"`)}<span class="c-name">${lhcEsc(r.name)}</span></div>
         ${line ? `<div class="c-line">${line}</div>` : ""}${ed}
@@ -1227,7 +1231,7 @@ class LivingHouseCard extends HTMLElement {
       if (lights.length) bits.push(`<div class="hero-v">${this._icon(lOn ? "mdi:lightbulb-on" : "mdi:lightbulb-outline", `class="${lOn ? "yellow" : "grey"}"`)}<b>${lOn}</b><span>/${lights.length}</span></div>`);
       hero = bits.length ? `<div class="hero">${bits.join("")}</div>` : "";
       sub = heat ? `<span class="tag hot">${this._icon("mdi:fire")}${this._t("heating_tag")}</span>` : "";
-      if (lights.length) sub += `<button class="tag btn" data-roomlights="${r.id}">${this._icon("mdi:lightbulb-group-outline")}${lOn ? this._t("all_off_btn") : this._t("all_on_btn")}</button>`;
+      if (lights.length) sub += `<button class="tag btn" data-roomlights="${lhcEsc(r.id)}">${this._icon("mdi:lightbulb-group-outline")}${lOn ? this._t("all_off_btn") : this._t("all_on_btn")}</button>`;
       if (this._cfg.rooms_page && this._roomPage[r.id]) sub += `<button class="tag btn open" data-nav="${lhcEsc(this._cfg.rooms_page)}#${lhcEsc(this._roomPage[r.id])}">${this._icon("mdi:arrow-top-right")}${this._t("open_room")}</button>`;
     }
     const body = rows ? rows.map(([id, name]) => {
@@ -1245,7 +1249,7 @@ class LivingHouseCard extends HTMLElement {
         const tt = s.attributes.media_title || s.attributes.app_name;
         val = `${lhcMap(this._lang, "media", s.state, lhcEsc(s.state))}${tt && s.state !== "off" ? ` · ${lhcEsc(tt)}` : ""}`;
       } else if (dom === "binary_sensor") val = s.state === "on" ? this._t("detected") : this._t("clear");
-      else val = `${lhcEsc(s.state)} ${s.attributes.unit_of_measurement || ""}`;
+      else val = `${lhcEsc(s.state)} ${lhcEsc(s.attributes.unit_of_measurement)}`;
       const icon = { switch: "mdi:lightbulb-outline", light: "mdi:led-strip-variant", fan: "mdi:fan", climate: "mdi:thermostat", binary_sensor: "mdi:motion-sensor", sensor: "mdi:thermometer", media_player: "mdi:television" }[dom] || "mdi:circle-small";
       const on = s && (s.state === "on" || (dom === "media_player" && LHC_TV_ON.includes(s.state)));
       return `<div class="p-row"><div class="p-main" data-more="${lhcEsc(id)}">${this._icon(icon, `class="p-ic ${on ? "yellow" : ""}"`)}<div><div>${lhcEsc(this._name(id, name))}</div><small>${val}</small></div></div>${ctl}</div>`;
@@ -1507,7 +1511,7 @@ class LivingHouseCard extends HTMLElement {
     p.innerHTML = `
       <div class="ed-hd">${this._icon("mdi:vector-square-edit")}<b>${this._t("ed_title")}</b><button class="round sm glass" data-edclose="1">${this._icon("mdi:close")}</button></div>
       <div class="ed-hint">${draw === "focus" ? this._t("ed_focus_hint") : draw ? this._t("ed_drawing") : this._t("ed_hint")}</div>
-      <div class="ed-rooms">${this._rooms.map((x) => `<button class="mchip ${this._sel === x.id ? "on" : ""}" data-edsel="${x.id}">${lhcEsc(x.name)}</button>`).join("")}</div>
+      <div class="ed-rooms">${this._rooms.map((x) => `<button class="mchip ${this._sel === x.id ? "on" : ""}" data-edsel="${lhcEsc(x.id)}">${lhcEsc(x.name)}</button>`).join("")}</div>
       ${r && !r.label ? `<div class="ed-acts">
         ${draw ? `<button class="mchip" data-edundo="1">${this._icon("mdi:undo")}${this._t("ed_undo")}</button><button class="mchip on" data-eddone="1">${this._icon("mdi:check")}${this._t("ed_done")}</button>`
         : `<button class="mchip" data-eddraw="shape">${this._icon("mdi:vector-polygon")}${this._t("ed_shape")}</button>
@@ -1521,7 +1525,7 @@ class LivingHouseCard extends HTMLElement {
   _renderEdSvg() {
     const svg = this._el("edsvg");
     if (!svg) return;
-    const pts = (a) => a.map(([x, y]) => `${x},${y}`).join(" ");
+    const pts = (a) => a.map(([x, y]) => `${Number(x)},${Number(y)}`).join(" ");
     let out = "";
     this._rooms.filter((r) => r.shape).forEach((r) => {
       out += `<polygon points="${pts(r.shape)}" class="ed-poly ${this._sel === r.id ? "sel" : ""}"/>`;
@@ -1530,7 +1534,7 @@ class LivingHouseCard extends HTMLElement {
     const r = this._sel && this._rooms.find((x) => x.id === this._sel);
     if (r && !r.label) {
       const f = this._focus(r);
-      out += `<circle cx="${f.x}" cy="${f.y}" r="1.1" class="ed-focus"/>`;
+      out += `<circle cx="${Number(f.x)}" cy="${Number(f.y)}" r="1.1" class="ed-focus"/>`;
     }
     if (this._draft && this._draft.length) {
       out += `<polyline points="${pts(this._draft)}" class="ed-draft"/>`;
@@ -1583,7 +1587,7 @@ class LivingHouseCard extends HTMLElement {
       const dx = ((ev.clientX - sx) / rect.width) * 100, dy = ((ev.clientY - sy) / rect.height) * 100;
       if (rz) { r.w = Math.max(4, Math.round((o.w + dx) * 10) / 10); r.h = Math.max(3, Math.round((o.h + dy) * 10) / 10); }
       else { r.x = Math.round((o.x + dx) * 10) / 10; r.y = Math.round((o.y + dy) * 10) / 10; }
-      const el = this._root.querySelector(`[data-chip="${r.id}"]`);
+      const el = this._root.querySelector(`[data-chip="${CSS.escape(r.id)}"]`);
       if (el) { el.style.left = `${r.x}%`; el.style.top = `${r.y}%`; el.style.width = `${r.w}%`; el.style.height = `${r.h}%`; }
     };
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); this._renderHouse(); };
@@ -2455,7 +2459,7 @@ class LivingRoomsCard extends HTMLElement {
     if (this._root) { this._root.innerHTML = ""; this._root = null; this.shadowRoot && (this.shadowRoot.innerHTML = ""); }
   }
   _t(k, a) { return lhcT(this._lang || "en", k, a); }
-  _m(g, k, f) { return lhcMap(this._lang || "en", g, k, f); }
+  _m(g, k, f) { return lhcEsc(lhcMap(this._lang || "en", g, k, f)); }
 
   _normalize() {
     const ent = (x) => (typeof x === "string" ? { entity: x } : x || {});
@@ -2549,7 +2553,7 @@ class LivingRoomsCard extends HTMLElement {
   _ok(id) { const s = this._s(id); return !!s && !LHC_BAD.includes(s.state); }
   _on(id) { const s = this._s(id); return !!s && s.state === "on"; }
   _num(v, d = 1) { const n = Number(v); return v !== null && v !== "" && v !== undefined && Number.isFinite(n) ? n.toFixed(d) : "—"; }
-  _icon(i, extra = "") { return `<ha-icon icon="${i}" ${extra}></ha-icon>`; }
+  _icon(i, extra = "") { return `<ha-icon icon="${lhcEsc(i)}" ${extra}></ha-icon>`; }
   _call(d, s, data) { return this._hass.callService(d, s, data); }
   _name(id, name) { return lhcEsc(name || (this._s(id) && this._s(id).attributes.friendly_name) || id); }
   _ids(r) {
@@ -2655,8 +2659,8 @@ class LivingRoomsCard extends HTMLElement {
       </header>
       <div class="bento" style="--rows:${rows}">
         ${this._rooms.map((r, i) => `
-          <article class="tile t-${r.id} sz-${sizes[i]} rise" style="--d:${i + 1};--acc:${r.accent}" ${r.link ? `data-nav="${lhcEsc(r.link)}"` : `data-open="${r.id}"`}>
-            <div class="t-img" style="${this._img(r) ? `background-image:url('${lhcEsc(this._img(r))}')` : ""}"></div>
+          <article class="tile t-${r.id} sz-${lhcEsc(sizes[i])} rise" style="--d:${i + 1};--acc:${r.accent}" ${r.link ? `data-nav="${lhcEsc(r.link)}"` : `data-open="${r.id}"`}>
+            <div class="t-img" style="${this._img(r) ? `background-image:${lhcEsc(lhcCssUrl(this._img(r)))}` : ""}"></div>
             <div class="t-shade"></div><div class="t-glare"></div>
             <div class="t-top">
               <span class="t-ic glass">${this._icon(r.icon)}</span>
@@ -2792,7 +2796,7 @@ class LivingRoomsCard extends HTMLElement {
     room.hidden = false;
     hub.hidden = true;
     hub.classList.remove("back-in");
-    this._el("bgimg").style.backgroundImage = this._img(r) ? `url('${lhcEsc(this._img(r))}')` : "";
+    this._el("bgimg").style.backgroundImage = this._img(r) ? lhcCssUrl(this._img(r)) : "";
     if (!this._isFit()) window.scrollTo({ top: 0 });
     room.classList.remove("enter", "slide-l", "slide-r");
     void room.offsetWidth;
@@ -2801,7 +2805,7 @@ class LivingRoomsCard extends HTMLElement {
       const end = hero.getBoundingClientRect();
       const ghost = document.createElement("div");
       ghost.className = "ghost";
-      ghost.style.backgroundImage = `url('${lhcEsc(this._img(r))}')`;
+      ghost.style.backgroundImage = lhcCssUrl(this._img(r));
       this._root.querySelector(".page").appendChild(ghost);
       room.classList.add("enter-flip");
       const anim = ghost.animate([
@@ -2883,7 +2887,7 @@ class LivingRoomsCard extends HTMLElement {
       <div class="rgrid ${cC ? "" : "two"}">
         <div class="col colA">
           <div class="hero" style="--acc:${r.accent};order:0">
-            <div class="hero-img" style="${this._img(r) ? `background-image:url('${lhcEsc(this._img(r))}')` : ""}"></div>
+            <div class="hero-img" style="${this._img(r) ? `background-image:${lhcEsc(lhcCssUrl(this._img(r)))}` : ""}"></div>
             <div class="hero-shade"></div>
             <div class="hero-body">
               <div class="hero-ic">${this._icon(r.icon)}</div>
@@ -2989,9 +2993,9 @@ class LivingRoomsCard extends HTMLElement {
     const pend = this._pending[`t:${id}`];
     const tgt = pend != null ? pend : a.temperature;
     const action = a.hvac_action;
-    const modes = (a.hvac_modes || []).filter((m) => LRC_HVAC_ICON[m]);
+    const modes = (a.hvac_modes || []).filter((m) => Object.hasOwn(LRC_HVAC_ICON, m));
     const modeChips = modes.map((m) => `<button class="mchip ${s.state === m ? "on" : ""}" data-hvac="${lhcEsc(id)}" data-v="${m}">${this._icon(LRC_HVAC_ICON[m])}${this._m("hvac", m)}</button>`).join("");
-    const actTxt = !avail ? this._t("st_offline") : off ? this._m("action", "off") : action ? this._m("action", action, lhcEsc(action)) : this._m("hvac", s.state, s.state);
+    const actTxt = !avail ? this._t("st_offline") : off ? this._m("action", "off") : action ? this._m("action", action, action) : this._m("hvac", s.state, s.state);
     const heating = action === "heating", cooling = action === "cooling";
     const hasT = tgt != null && Number.isFinite(Number(tgt));
     if (kind === "main" || kind === "ac") {
@@ -3046,12 +3050,12 @@ class LivingRoomsCard extends HTMLElement {
     const title = a.media_title || (on ? a.app_name || "" : "");
     const sub = [a.media_artist || a.media_series_title, a.app_name && a.media_title ? a.app_name : ""].filter(Boolean).join(" · ");
     const vpct = Math.round((vol || 0) * 100);
-    const st = this._m("media", s.state, lhcEsc(s.state));
+    const st = this._m("media", s.state, s.state);
     return `
       <div class="md glass ${playing ? "playing" : ""} ${!on ? "is-off" : ""}">
-        ${pic ? `<div class="md-bg" style="background-image:url('${lhcEsc(pic)}')"></div>` : ""}
+        ${pic ? `<div class="md-bg" style="background-image:${lhcEsc(lhcCssUrl(pic))}"></div>` : ""}
         <div class="md-row">
-          <div class="md-art" ${pic ? `style="background-image:url('${lhcEsc(pic)}')"` : ""}>${pic ? "" : this._icon(speaker ? "mdi:speaker" : "mdi:television-classic")}${playing ? `<span class="eq"><i></i><i></i><i></i></span>` : ""}</div>
+          <div class="md-art" ${pic ? `style="background-image:${lhcEsc(lhcCssUrl(pic))}"` : ""}>${pic ? "" : this._icon(speaker ? "mdi:speaker" : "mdi:television-classic")}${playing ? `<span class="eq"><i></i><i></i><i></i></span>` : ""}</div>
           <div class="md-txt">
             <div class="md-name">${this._name(id, nm)}</div>
             <div class="md-title">${lhcEsc(title) || st}</div>
@@ -3075,7 +3079,7 @@ class LivingRoomsCard extends HTMLElement {
       const kind = this._kind(id, k);
       const avail = !LHC_BAD.includes(s.state);
       const on = s.state === "on";
-      let icon = "mdi:access-point", val = avail ? `${lhcEsc(s.state)} ${s.attributes.unit_of_measurement || ""}` : this._t("st_offline"), cls = "";
+      let icon = "mdi:access-point", val = avail ? `${lhcEsc(s.state)} ${lhcEsc(s.attributes.unit_of_measurement)}` : this._t("st_offline"), cls = "";
       if (kind === "window") { icon = on ? "mdi:window-open-variant" : "mdi:window-closed-variant"; val = on ? this._t("open") : this._t("closed"); cls = on ? "warn" : "ok"; }
       if (kind === "leak") { icon = on ? "mdi:water-alert" : "mdi:water-check-outline"; val = on ? this._t("leak") : this._t("dry"); cls = on ? "bad" : "ok"; }
       if (kind === "co") { icon = on ? "mdi:molecule-co" : "mdi:shield-check-outline"; val = on ? this._t("co") : this._t("safe"); cls = on ? "bad" : "ok"; }
@@ -3083,7 +3087,7 @@ class LivingRoomsCard extends HTMLElement {
       if (kind === "binary") { icon = on ? "mdi:checkbox-blank-circle" : "mdi:checkbox-blank-circle-outline"; val = on ? this._t("detected") : this._t("clear"); }
       if (kind === "battery") { const n = Number(s.state); icon = n > 60 ? "mdi:battery-high" : n > 25 ? "mdi:battery-medium" : "mdi:battery-low"; val = `${this._num(s.state, 0)}%`; cls = n > 25 ? "ok" : "warn"; }
       if (kind === "pm") { const n = Number(s.state); icon = "mdi:molecule"; val = `${this._num(s.state, 0)} µg/m³`; cls = n <= 12 ? "ok" : n <= 35 ? "warn" : "bad"; }
-      if (kind === "aq") { icon = "mdi:leaf"; val = this._m("aq_states", s.state, lhcEsc(s.state)); cls = LRC_AQ_OK.includes(s.state) ? "ok" : ""; }
+      if (kind === "aq") { icon = "mdi:leaf"; val = this._m("aq_states", s.state, s.state); cls = LRC_AQ_OK.includes(s.state) ? "ok" : ""; }
       if (!avail) cls = "dim";
       return `<button class="sens glass ${cls}" data-more="${lhcEsc(id)}">${this._icon(icon)}<div><div class="s-name">${this._name(id, nm)}</div><div class="s-val">${val}</div></div></button>`;
     }).join("")}</div>`;
@@ -3095,7 +3099,7 @@ class LivingRoomsCard extends HTMLElement {
       const f = this._s(d.fan);
       if (!f) return "";
       const on = f.state === "on";
-      const pct = f.attributes.percentage ?? 0;
+      const pct = Number(f.attributes.percentage) || 0;
       const pm = Number(this._s(d.pm)?.state);
       const flt = Number(this._s(d.filter)?.state);
       const presets = f.attributes.preset_modes || [];
@@ -3117,11 +3121,11 @@ class LivingRoomsCard extends HTMLElement {
     if (d.type === "feeder") {
       const st = this._s(d.status)?.state;
       const n = this._s(d.manual);
-      const max = n ? n.attributes.max || 10 : 10;
+      const max = Number(n?.attributes.max) || 10;
       const portions = this._pending[`p:${d.manual}`] ?? 1;
       return `
         <div class="dev glass feeder">
-          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("feeder"))}</div><div class="dev-sub">${st ? this._m("feeder_st", st, lhcEsc(st)) : "—"}</div></div></div>
+          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("feeder"))}</div><div class="dev-sub">${st ? this._m("feeder_st", st, st) : "—"}</div></div></div>
           ${d.manual ? `<div class="feed">
             <div class="stepper big"><button class="sbtn" data-portion="${lhcEsc(d.manual)}" data-v="-1" data-max="${max}">${this._icon("mdi:minus")}</button><b>${portions}</b><span>${this._t("portions", portions)}</span><button class="sbtn" data-portion="${lhcEsc(d.manual)}" data-v="1" data-max="${max}">${this._icon("mdi:plus")}</button></div>
             <button class="cta" data-feed="${lhcEsc(d.manual)}">${this._icon("mdi:food-drumstick-outline")}${this._t("feed_now")}</button>
@@ -3133,7 +3137,7 @@ class LivingRoomsCard extends HTMLElement {
       const st = this._s(d.status)?.state;
       return `
         <div class="dev glass litter">
-          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("litter"))}</div><div class="dev-sub">${st ? this._m("litter_st", st, lhcEsc(st)) : "—"}</div></div>
+          <div class="dev-hd">${this._icon("mdi:cat", 'class="dev-ic"')}<div><div class="dev-name">${lhcEsc(d.name || this._t("litter"))}</div><div class="dev-sub">${st ? this._m("litter_st", st, st) : "—"}</div></div>
             ${d.clean ? `<button class="cta sm" data-clean="${lhcEsc(d.clean)}">${this._icon("mdi:broom")}${this._t("clean")}</button>` : ""}</div>
           ${d.switches.length ? `<div class="toggles">${sws(d.switches)}</div>` : ""}
         </div>`;
@@ -3145,12 +3149,12 @@ class LivingRoomsCard extends HTMLElement {
       const avail = s && !LHC_BAD.includes(s.state);
       const running = avail && s.state === "running";
       const rem = Number(this._s(d.remaining)?.state);
-      const extra = washer ? (this._ok(d.temp) ? (this._s(d.temp).state === "cold" ? this._t("cold") : this._s(d.temp).state + "°C") : "") : (this._ok(d.program) ? this._m("dry_prog", this._s(d.program).state, this._s(d.program).state.replace(/_/g, " ")) : "");
+      const extra = washer ? (this._ok(d.temp) ? (this._s(d.temp).state === "cold" ? this._t("cold") : lhcEsc(this._s(d.temp).state) + "°C") : "") : (this._ok(d.program) ? this._m("dry_prog", this._s(d.program).state, this._s(d.program).state.replace(/_/g, " ")) : "");
       const warns = !washer ? [[d.water, this._t("waterbox_full")], [d.filter, this._t("empty_filter")]].filter(([e]) => e && this._on(e)) : [];
       return `
         <div class="dev glass appl ${running ? "running" : ""} ${!avail ? "is-off" : ""}">
-          <div class="dev-hd">${this._icon(washer ? "mdi:washing-machine" : "mdi:tumble-dryer", `class="dev-ic ${running ? "spin" : ""}"`)}<div><div class="dev-name">${lhcEsc(d.name || this._t(washer ? "washer" : "dryer"))}</div><div class="dev-sub">${avail ? this._m(washer ? "washer_st" : "dryer_st", s.state, lhcEsc(s.state)) : this._t("appl_offline")}</div></div></div>
-          ${avail ? `<div class="appl-body"><div class="rem"><b>${Number.isFinite(rem) && rem > 0 ? rem : "—"}</b><span>${this._t("min_left")}</span></div>${extra ? `<div class="tag">${this._icon(washer ? "mdi:thermometer" : "mdi:tune-variant")}${lhcEsc(extra)}</div>` : ""}</div>` : ""}
+          <div class="dev-hd">${this._icon(washer ? "mdi:washing-machine" : "mdi:tumble-dryer", `class="dev-ic ${running ? "spin" : ""}"`)}<div><div class="dev-name">${lhcEsc(d.name || this._t(washer ? "washer" : "dryer"))}</div><div class="dev-sub">${avail ? this._m(washer ? "washer_st" : "dryer_st", s.state, s.state) : this._t("appl_offline")}</div></div></div>
+          ${avail ? `<div class="appl-body"><div class="rem"><b>${Number.isFinite(rem) && rem > 0 ? rem : "—"}</b><span>${this._t("min_left")}</span></div>${extra ? `<div class="tag">${this._icon(washer ? "mdi:thermometer" : "mdi:tune-variant")}${extra}</div>` : ""}</div>` : ""}
           ${warns.map(([, t]) => `<div class="warnrow">${this._icon("mdi:alert-outline")}${t}</div>`).join("")}
         </div>`;
     }
@@ -3190,7 +3194,7 @@ class LivingRoomsCard extends HTMLElement {
       if (!f) return "";
       const a = f.attributes, empty = a.empty || f.state === "Empty";
       const col = String(a.color || "#000000").slice(0, 7);
-      return `<div class="fil ${a.active ? "on" : ""} ${empty ? "empty" : ""}" title="${lhcEsc(f.state)}"><i style="background:${empty ? "transparent" : col}"></i><span>${empty ? this._t("pr_empty") : lhcEsc(a.type || f.state)}</span></div>`;
+      return `<div class="fil ${a.active ? "on" : ""} ${empty ? "empty" : ""}" title="${lhcEsc(f.state)}"><i style="background:${empty ? "transparent" : lhcEsc(col)}"></i><span>${empty ? this._t("pr_empty") : lhcEsc(a.type || f.state)}</span></div>`;
     }).join("");
     const btn = (id, icon, label, cls = "") => (id && S(id) && S(id).state !== "unavailable" ? `<button class="mchip ${cls}" data-press="${lhcEsc(id)}" ${cls === "danger" ? 'data-confirm="1"' : ""}>${this._icon(icon)}${label}</button>` : "");
     const light = S(d.light);
@@ -3198,7 +3202,7 @@ class LivingRoomsCard extends HTMLElement {
     return `
       <div class="dev glass printer ${active ? "printing" : ""} ${st === "failed" ? "failed" : ""} ${!avail ? "is-off" : ""}">
         <div class="dev-hd">${this._icon("mdi:printer-3d-nozzle", `class="dev-ic ${st === "running" ? "pulse-ic" : ""}"`)}<div><div class="dev-name">${lhcEsc(d.name || this._t("printer"))}</div>
-          <div class="dev-sub">${this._m("pr_status", st, lhcEsc(st))}${stageTxt ? ` · ${lhcEsc(stageTxt)}` : ""}</div></div>
+          <div class="dev-sub">${this._m("pr_status", st, st)}${stageTxt ? ` · ${stageTxt}` : ""}</div></div>
           ${light ? `<button class="power ${light.state === "on" ? "on" : ""}" data-toggle="${lhcEsc(d.light)}" title="${this._t("pr_light")}">${this._icon(light.state === "on" ? "mdi:lightbulb-on" : "mdi:lightbulb-outline")}</button>` : ""}
         </div>
         <div class="pr-body">
@@ -3830,7 +3834,7 @@ class LivingCatsCard extends HTMLElement {
   _s(id) { return id && this._hass ? this._hass.states[id] : undefined; }
   _ok(id) { const s = this._s(id); return !!s && !LHC_BAD.includes(s.state); }
   _on(id) { const s = this._s(id); return !!s && s.state === "on"; }
-  _icon(i, extra = "") { return `<ha-icon icon="${i}" ${extra}></ha-icon>`; }
+  _icon(i, extra = "") { return `<ha-icon icon="${lhcEsc(i)}" ${extra}></ha-icon>`; }
 
   _img(k) {
     const own = this._cfg.images && this._cfg.images[k];
@@ -3900,7 +3904,7 @@ class LivingCatsCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${LCC_STYLE}</style>
       <div class="wrap">
         <div class="scene glass">
-          ${LCC_SCENES.map((k) => `<div class="layer" data-k="${k}" style="background-image:url('${lhcEsc(this._img(k))}')"></div>`).join("")}
+          ${LCC_SCENES.map((k) => `<div class="layer" data-k="${k}" style="background-image:${lhcEsc(lhcCssUrl(this._img(k)))}"></div>`).join("")}
           <div class="tint"></div>
           <div class="fx fx-uv"></div><div class="fx fx-clean"><i></i><i></i></div><div class="fx fx-full"></div><div class="fx fx-feed"></div>
           ${this._cfg.back_path ? `<button class="back glass" data-nav="${lhcEsc(this._cfg.back_path)}">${this._icon("mdi:arrow-left")}<span>${lhcEsc(this._cfg.back_name || this._t("rooms_title"))}</span></button>` : ""}
@@ -4186,5 +4190,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.5.2 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.5.3 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();

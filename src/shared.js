@@ -4,13 +4,17 @@ const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
 const lhcEsc = (x) => String(x ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+// Quote URLs for CSS before escaping any surrounding HTML attribute.
+const lhcCssUrl = (value) => {
+  const url = String(value ?? "").replace(/['\\\u0000-\u001f\u007f]/g, (char) => "\\" + char.charCodeAt(0).toString(16) + " ");
+  return `url('${url}')`;
+};
 const lhcArr = (x) => (x == null ? [] : Array.isArray(x) ? x : [x]);
 const lhcUniq = (a) => [...new Set(a.filter(Boolean))];
 
 /* "#f59e0b" | "245,158,11" | [245,158,11] -> "245,158,11" */
 function lhcRgb(c, fallback = "96,165,250") {
   if (!c) return fallback;
-  if (Array.isArray(c)) return c.join(",");
   const s = String(c).trim();
   const m = s.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (m) {
@@ -194,7 +198,7 @@ function lhcT(lang, key, arg) {
 }
 function lhcMap(lang, group, key, fallback) {
   const g = (LHC_I18N[lang] && LHC_I18N[lang][group]) || LHC_I18N.en[group] || {};
-  return g[key] ?? fallback ?? key;
+  return Object.hasOwn(g, key) ? g[key] : fallback ?? key;
 }
 
 /* ---------- akcje (sceny) ----------
