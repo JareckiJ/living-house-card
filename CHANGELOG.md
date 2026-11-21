@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1 – Clean room zoom
+
+- When a room is zoomed in, the room labels are fully hidden. Before, their frosted-glass blur could stay on the picture as a matte patch on some screens.
+
 ## 0.6.0 – Small tablets, cameras and cards in panels
 
 - Small landscape tablets (for example 7") keep the side panels next to the house. The card switches to a compact layout with narrower panels instead of moving them below.

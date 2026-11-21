@@ -1,8 +1,8 @@
-/*! Living House Card v0.6.0 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.6.1 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.6.0";
+const LHC_VERSION = "0.6.1";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -2012,7 +2012,7 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 .legend{position:absolute;left:50%;bottom:1.5%;transform:translateX(-50%);z-index:4;display:none;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:12px;color:var(--dim)}
 .legend i{width:130px;height:8px;border-radius:4px;background:linear-gradient(90deg,hsl(215,90%,55%),hsl(200,90%,55%),hsl(165,90%,50%),hsl(95,90%,50%),hsl(48,95%,55%),hsl(30,95%,55%),hsl(8,95%,55%))}
 .house.heatmap .legend{display:flex}
-.house.zoomed .hm-btn,.house.zoomed .legend{opacity:0;pointer-events:none}
+.house.zoomed .hm-btn,.house.zoomed .legend{opacity:0;visibility:hidden;pointer-events:none;-webkit-backdrop-filter:none;backdrop-filter:none}
 #dn.forced{border-color:rgba(251,191,36,.6);box-shadow:0 0 12px rgba(251,191,36,.35),inset 0 1px 0 rgba(255,255,255,.2)}
 
 /* ---------- wygaszacz (tablet) ---------- */
@@ -2034,8 +2034,11 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 .spot{position:absolute;inset:-2px;opacity:0;pointer-events:none;transition:opacity .7s ease;cursor:zoom-out;
   background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),transparent 0,transparent 24%,rgba(3,7,16,.55) 46%,rgba(3,7,16,.82) 75%)}
 .house.zoomed .spot{opacity:1;pointer-events:auto}
-.house.zoomed .chips{opacity:0;pointer-events:none;transform:scale(.96)}
-.chips{transition:opacity .35s ease,transform .35s ease}
+/* zoomed in: labels fade out, then are removed from rendering. opacity:0 alone left their
+   frosted-glass blur (backdrop-filter) visible as a matte patch on some GPUs. */
+.chips{transition:opacity .35s ease,transform .35s ease,visibility 0s}
+.house.zoomed .chips{opacity:0;visibility:hidden;pointer-events:none;transform:scale(.96);transition:opacity .35s ease,transform .35s ease,visibility 0s .35s}
+.house.zoomed .chip{-webkit-backdrop-filter:none;backdrop-filter:none}
 
 .chip{position:absolute;display:flex;flex-direction:column;justify-content:center;gap:.35cqw;padding:.5cqw 1.1cqw;border-radius:1.2cqw;
   background:linear-gradient(150deg,rgba(255,255,255,.14),rgba(255,255,255,.04) 50%),rgba(10,16,30,.55);
@@ -4276,5 +4279,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.6.0 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.6.1 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();
