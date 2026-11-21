@@ -88,3 +88,16 @@ test("cats status remains plain text when rendered with textContent", () => {
   assert.equal(cats._litterText({ lst: example }), example);
   assert.equal(cats._feederText({ fst: example }), example);
 });
+
+test("house image uses a plain src and a CSS url() only in the style", () => {
+  const html = [];
+  const house = makeCard("house");
+  const root = { set innerHTML(v) { html.push(v); }, addEventListener() {}, getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] };
+  const src = "/local/dom3d/house.webp";
+  Object.assign(house, { _root: root, _cfg: { image: src }, _rooms: [], _energy: {}, _heatingList: [], _sideEntities: { left: [], right: [], heating: [] }, _sidePanel: () => "", _t: (k) => k, _layersHtml: () => "" });
+  try { house._build(); } catch (e) { /* DOM work after the template is out of scope */ }
+  const out = html.join("");
+  assert.ok(out.includes(`<img src="${src}"`), "img src is the plain path");
+  assert.doesNotMatch(out, /src="url\(/);
+  assert.ok(out.includes(`--img:url('${src}')`), "CSS variable keeps url()");
+});

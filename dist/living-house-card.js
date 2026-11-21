@@ -1,8 +1,8 @@
-/*! Living House Card v0.5.3 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.5.4 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.5.3";
+const LHC_VERSION = "0.5.4";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -663,11 +663,13 @@ class LivingHouseCard extends HTMLElement {
       this._root.addEventListener("pointerdown", (e) => this._edPointerDown(e));
     }
     const c = this._cfg;
-    const img = lhcEsc(lhcCssUrl(c.image));
+    // <img src> takes the plain path; only the CSS variable needs url('...').
+    const img = c.image ? lhcEsc(c.image) : "";
+    const cssImg = c.image ? lhcEsc(lhcCssUrl(c.image)) : "none";
     const [h0, h1] = c.heatmap_range || [16, 26];
     this._root.innerHTML = `
       <style>${LHC_HOUSE_STYLE}</style>
-      <div class="outer fluid" style="--img:${img}">
+      <div class="outer fluid" style="--img:${cssImg}">
         <div class="bg">
           <div class="night"></div>
           <div class="blur-img"></div>
@@ -4190,5 +4192,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.5.3 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.5.4 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();

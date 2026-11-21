@@ -323,11 +323,13 @@ class LivingHouseCard extends HTMLElement {
       this._root.addEventListener("pointerdown", (e) => this._edPointerDown(e));
     }
     const c = this._cfg;
-    const img = lhcEsc(lhcCssUrl(c.image));
+    // <img src> takes the plain path; only the CSS variable needs url('...').
+    const img = c.image ? lhcEsc(c.image) : "";
+    const cssImg = c.image ? lhcEsc(lhcCssUrl(c.image)) : "none";
     const [h0, h1] = c.heatmap_range || [16, 26];
     this._root.innerHTML = `
       <style>${LHC_HOUSE_STYLE}</style>
-      <div class="outer fluid" style="--img:${img}">
+      <div class="outer fluid" style="--img:${cssImg}">
         <div class="bg">
           <div class="night"></div>
           <div class="blur-img"></div>

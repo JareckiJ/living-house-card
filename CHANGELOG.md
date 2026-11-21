@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4 – House image fix
+
+- The house image shows again. In 0.5.3 the image tag received the CSS form `url('…')` instead of the file path, so only the blurred background was visible.
+- A card without `image` shows the "configure" hint again.
+
 ## 0.5.3 – Safe HTML rendering
 
 - Escape entity states, units, room IDs and icons in the three card templates.
