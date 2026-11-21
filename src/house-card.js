@@ -3,6 +3,9 @@
  */
 const LHC_BASE_W = 1480;
 const LHC_BASE_H = 820;
+// Smaller canvas for small landscape tablets (e.g. 7"): narrower panels, so everything is scaled down less.
+const LHC_COMPACT_W = 1180;
+const LHC_COMPACT_H = 680;
 
 const LHC_DEFAULTS = {
   image: null,
@@ -65,6 +68,7 @@ class LivingHouseCard extends HTMLElement {
     this._raw = { ...LHC_DEFAULTS, ...config };
     this._cfg = lhcApplyPreset(this._raw, this._lang || lhcLang(this._hass, this._raw));
     this._normalize();
+    this._cards = null;
     this._room = null;
     const ls = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
     this._scene = ls("lhc-scene", "");
@@ -124,7 +128,7 @@ class LivingHouseCard extends HTMLElement {
     for (const side of ["left", "right", "heating"]) {
       this._sideEntities[side] = lhcArr(c.side_panels?.[side])
         .map((item) => typeof item === "string" ? { entity: item } : item)
-        .filter((item) => item && (typeof item.entity === "string" || item.tap_action?.action === "navigate"));
+        .filter((item) => item && (typeof item.entity === "string" || typeof item.camera === "string" || lhcIsCard(item.card) || item.tap_action?.action === "navigate"));
     }
     const e = c.energy || {};
     this._energy = typeof e === "string" ? { power: e } : e;
@@ -192,6 +196,7 @@ class LivingHouseCard extends HTMLElement {
     }
     if (!this._root || langChanged) this._build();
     else if (!old || this._changed(old, hass)) this._update();
+    if (this._cards) Object.values(this._cards).forEach((c) => { if (c.el) c.el.hass = hass; });
     const now = Date.now();
     if (this._energy.power && (!this._histAt || now - this._histAt > 5 * 60 * 1000)) {
       this._histAt = now;
@@ -244,11 +249,15 @@ class LivingHouseCard extends HTMLElement {
     const w = this.clientWidth || this.getBoundingClientRect().width;
     const top = Math.max(0, this.getBoundingClientRect().top + (window.scrollY || 0));
     const h = window.innerHeight - top;
-    const fit = this._cfg.fit && w >= 900 && h >= 420;
+    // Big screens always fit; smaller ones fit when they are landscape (a 7" tablet lying down).
+    const fit = !!this._cfg.fit && ((w >= 900 && h >= 420) || (w >= 600 && h >= 330 && w >= h * 1.15));
+    const zFull = Math.min(w / LHC_BASE_W, h / LHC_BASE_H);
+    const compact = fit && zFull < 0.8;
     outer.classList.toggle("fit", fit);
     outer.classList.toggle("fluid", !fit);
+    outer.classList.toggle("compact", compact);
     if (fit) {
-      const z = Math.min(w / LHC_BASE_W, h / LHC_BASE_H);
+      const z = compact ? Math.min(w / LHC_COMPACT_W, h / LHC_COMPACT_H) : zFull;
       outer.style.height = `${h}px`;
       outer.style.setProperty("--z", z.toFixed(4));
       requestAnimationFrame(() => this._fitStatus());
@@ -510,27 +519,66 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _sidePanel(side) {
-    return this._sideEntities[side].length
-      ? `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}"></div>`
-      : "";
+    const items = this._sideEntities[side];
+    if (!items.length) return "";
+    // One slot per tile: entity rows are re-rendered, embedded cards stay mounted (a live camera keeps streaming).
+    const slots = items.map((item, i) => `<div class="${lhcTileCard(item) ? "side-card" : "side-slot"}" data-slot="${side}:${i}"></div>`).join("");
+    return `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}">${slots}</div>`;
   }
 
   _renderSidePanels() {
     Object.entries(this._sideEntities).forEach(([side, items]) => {
       const el = this._el(`entities-${side}`);
       if (!el) return;
-      const html = items.map(({ entity, name, icon }, index) => {
+      items.forEach((item, index) => {
+        const slot = el.querySelector(`[data-slot="${side}:${index}"]`);
+        if (!slot) return;
+        const card = lhcTileCard(item);
+        if (card) return this._mountCard(slot, `${side}:${index}`, card);
+        const { entity, name, icon } = item;
         const state = this._s(entity);
         const value = this._hass.formatEntityState
           ? (state ? this._hass.formatEntityState(state) : "—")
           : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
-        return `<button type="button" class="side-entity" data-tile="${side}:${index}">
+        this._html(slot, `<button type="button" class="side-entity" data-tile="${side}:${index}">
           ${this._icon(icon || state?.attributes.icon || "mdi:information-outline")}
-          <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
-        </button>`;
-      }).join("");
-      this._html(el, html);
+          <span>${lhcEsc(this._name(entity, name) || item.tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
+        </button>`);
+      });
     });
+  }
+
+  /* Any Lovelace card inside a side panel (calendar, buttons, camera …), created with HA's own card helpers. */
+  _mountCard(slot, key, config) {
+    this._cards = this._cards || {};
+    const entry = this._cards[key];
+    if (entry && entry.json === JSON.stringify(config)) {
+      if (entry.el) {
+        entry.el.hass = this._hass;
+        if (entry.el.parentNode !== slot) slot.replaceChildren(entry.el);
+      }
+      return;
+    }
+    const next = { json: JSON.stringify(config), el: null };
+    this._cards[key] = next;
+    (async () => {
+      let el;
+      try {
+        const helpers = window.loadCardHelpers ? await window.loadCardHelpers() : null;
+        if (!helpers) throw new Error("card helpers unavailable");
+        el = await helpers.createCardElement(config);
+      } catch (err) {
+        console.error("living-house-card side card", err);
+        el = document.createElement("div");
+        el.className = "card-error";
+        el.textContent = this._t("card_error");
+      }
+      if (this._cards[key] !== next) return;
+      next.el = el;
+      el.hass = this._hass;
+      const live = this._root && this._root.querySelector(`[data-slot="${key}"]`);
+      if (live) live.replaceChildren(el);
+    })();
   }
 
   _weather() {

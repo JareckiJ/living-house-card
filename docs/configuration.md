@@ -37,7 +37,7 @@ All positions are **percentages of the picture** (0–100), so they work at any 
 | `scenes` | list | `[]` | Scene buttons, see [Scenes](#scenes). |
 | `side_panels` | object | `{}` | Tiles for the left, right and heating sections. |
 | `rooms` | list | `[]` | See below. |
-| `fit` | bool | `true` | Scale to the window without scrolling (laptop/tablet). |
+| `fit` | bool | `true` | Scale to the window without scrolling (laptop/tablet). Small landscape tablets get a compact layout with the panels still on the sides. |
 | `tilt` | bool | `true` | Subtle 3D tilt that follows the mouse. |
 | `zoom` | number | `2.1` | Zoom level when a room is opened. |
 | `weather_fx` | bool | `true` | Rain, snow, clouds, fog, lightning. |
@@ -74,6 +74,38 @@ side_panels:
     - sensor.boiler_water_temperature
     - sensor.pellet_level
 ```
+
+### Cameras and cards in panels
+
+A camera tile shows the camera picture in the panel; selecting it opens the
+camera. In the editor, pick a `camera.` entity and choose the picture type.
+
+```yaml
+side_panels:
+  left:
+    - camera: camera.door_intercom
+      name: Front door
+      camera_view: auto   # refreshed snapshot (default, lighter) or live
+```
+
+Any Home Assistant card can go into a panel with `card:` (YAML only), for
+example a calendar, buttons or a camera card from WebRTC or Frigate:
+
+```yaml
+side_panels:
+  right:
+    - card:
+        type: calendar
+        initial_view: listWeek
+        entities:
+          - calendar.family
+    - card:
+        type: custom:webrtc-camera
+        entity: camera.door_intercom
+```
+
+Panels scroll when their content is taller than the screen. A live stream uses
+more bandwidth and battery than a snapshot, so prefer `auto` on wall tablets.
 
 ### Heating controls
 

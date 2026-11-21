@@ -97,6 +97,20 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 /* ---------- panele ---------- */
 .panel{border-radius:18px;padding:13px 16px;overflow:hidden}
 .outer.fit aside:has(.side-entities){overflow-y:auto}
+/* small landscape tablets: compact canvas */
+.outer.fit.compact .wrap{width:${LHC_COMPACT_W}px;height:${LHC_COMPACT_H}px;gap:10px;padding:10px 12px 12px;
+  grid-template-columns:232px minmax(0,1fr) 240px;grid-template-rows:52px minmax(0,1fr) 78px}
+.outer.fit.compact aside{overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(147,197,253,.35) transparent}
+.outer.fit.compact aside>.panel{flex-shrink:0}
+.outer.fit.compact .status,.outer.fit.compact .energy{flex:1 0 auto}
+.outer.fit.compact .scene{width:126px;height:74px}
+.outer.fit.compact .round{width:42px;height:42px}
+/* cards embedded in side panels */
+.side-card{margin:6px 0;border-radius:14px;overflow:hidden;
+  --ha-card-background:rgba(4,9,20,.35);--card-background-color:rgba(4,9,20,.35);--ha-card-box-shadow:none;
+  --ha-card-border-width:0;--ha-card-border-radius:14px;--primary-text-color:#e8eefc;--secondary-text-color:#9fb0cc}
+.side-card:first-child{margin-top:0}.side-card:last-child{margin-bottom:0}
+.card-error{padding:10px;font-size:12px;color:var(--dim)}
 .outer.fit aside:has(.side-entities)>.panel{flex-shrink:0}
 .outer.fit aside:has(.side-entities)>.status,.outer.fit aside:has(.side-entities)>.energy{flex:1 0 auto}
 .side-entity{display:flex;align-items:center;gap:8px;width:100%;min-height:42px;padding:4px 0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}

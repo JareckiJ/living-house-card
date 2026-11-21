@@ -166,6 +166,7 @@ class LivingHouseCardEditor extends HTMLElement {
       name: pl ? "Nazwa" : "Name", icon: pl ? "Ikona" : "Icon",
       path: pl ? "Ścieżka widoku (opcjonalnie)" : "View path (optional)",
       service: pl ? "Akcja HA (opcjonalnie)" : "HA action (optional)",
+      view: pl ? "Kamera: obraz" : "Camera: picture",
     };
     form.schema = [
       { name: "side", selector: { select: { mode: "dropdown", options: [
@@ -178,6 +179,10 @@ class LivingHouseCardEditor extends HTMLElement {
       { name: "icon", selector: { icon: {} } },
       { name: "path", selector: { text: {} } },
       { name: "service", selector: { text: {} } },
+      { name: "view", selector: { select: { mode: "dropdown", options: [
+        { value: "auto", label: pl ? "Zdjęcie odświeżane (lżejsze)" : "Refreshed snapshot (lighter)" },
+        { value: "live", label: pl ? "Na żywo" : "Live stream" },
+      ] } } },
     ];
     form.computeLabel = (schema) => fields[schema.name];
     const button = document.createElement("button");
@@ -202,8 +207,14 @@ class LivingHouseCardEditor extends HTMLElement {
       const side = v.side || "left";
       const edit = this._tileEdit;
       const tile = { ...edit?.tile };
-      for (const key of ["entity", "name", "icon", "tap_action"]) delete tile[key];
+      for (const key of ["entity", "name", "icon", "tap_action", "camera", "camera_view"]) delete tile[key];
       for (const key of ["entity", "name", "icon"]) if (v[key]) tile[key] = v[key];
+      // A camera entity becomes a camera tile (picture on the panel).
+      if (v.entity && v.entity.startsWith("camera.") && !v.path && !v.service) {
+        delete tile.entity; delete tile.icon;
+        tile.camera = v.entity;
+        tile.camera_view = v.view === "live" ? "live" : "auto";
+      }
       if (v.path) tile.tap_action = { action: "navigate", navigation_path: v.path };
       if (v.service) {
         tile.tap_action = { action: "perform-action", perform_action: v.service };
@@ -222,7 +233,7 @@ class LivingHouseCardEditor extends HTMLElement {
     };
     this._editTile = (side, index, tile) => {
       this._tileEdit = tile ? { side, index, tile } : null;
-      form.data = tile ? { side, entity: tile.entity, name: tile.name, icon: tile.icon,
+      form.data = tile ? { side, entity: tile.entity || tile.camera, name: tile.name, icon: tile.icon, view: tile.camera_view,
         path: tile.tap_action?.navigation_path, service: tile.tap_action?.perform_action } : { side };
       button.textContent = tile ? saveLabel : addLabel;
       button.disabled = !valid(form.data);
@@ -241,11 +252,13 @@ class LivingHouseCardEditor extends HTMLElement {
         const tile = typeof raw === "string" ? { entity: raw } : raw;
         if (!tile) return;
         const row = document.createElement("p");
-        row.textContent = `${sections[index]} · ${tile.name || tile.entity || tile.tap_action?.navigation_path || "—"} `;
+        const what = tile.card ? `${pl ? "karta" : "card"} ${tile.card.type || ""}` : tile.camera ? `📷 ${tile.camera}` : "";
+        row.textContent = `${sections[index]} · ${tile.name || what || tile.entity || tile.tap_action?.navigation_path || "—"} `;
         const edit = document.createElement("button");
         edit.type = "button";
         edit.textContent = pl ? "Edytuj" : "Edit";
         edit.onclick = () => this._editTile(side, i, tile);
+        edit.hidden = !!tile.card; // cards are edited in YAML
         const remove = document.createElement("button");
         remove.type = "button";
         remove.textContent = pl ? "Usuń" : "Remove";

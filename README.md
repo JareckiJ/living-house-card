@@ -6,7 +6,7 @@
 
 ![Living House Card – night](images/house-night.webp)
 
-> **Status: beta (v0.5).** It works great on the author's home – now it needs yours. Please report bugs and ideas in [Issues](../../issues).
+> **Status: beta (v0.6).** It works great on the author's home – now it needs yours. Please report bugs and ideas in [Issues](../../issues).
 
 ## ✨ Features
 
@@ -21,8 +21,9 @@
 | 🔍 **Room zoom** | Tap a room – the camera flies in, the rest dims, a glass panel shows its devices. |
 | 🧊 **Frosted glass UI** | Weather, home status, heating, air, energy (24 h sparkline), scenes. |
 | 🧩 **Your own tiles** | Add tiles to the left, right and heating panels in the visual editor: open entity details, go to another view (e.g. cameras) or run an action after confirmation (e.g. open the gate). |
+| 📷 **Cameras and cards** | A camera picture (snapshot or live) or any Home Assistant card – calendar, buttons – right in a side panel. |
 | 🔥 **Any heating** | Thermostats, a boiler (`water_heater`), its sensors and switches – all in the heating panel. |
-| 🖥️ **Fits the screen** | Scales itself to laptops and tablets – no scrolling. Phones get a scrolling layout. |
+| 🖥️ **Fits the screen** | Scales itself to laptops and tablets, 7" included – no scrolling. Phones get a scrolling layout. |
 | 📱 **Tablet mode** | `?kiosk` → full screen; after 3 minutes a clock screensaver with weather. |
 | 🎯 **Calibration mode** | Drag labels, draw room outlines with the mouse, copy the YAML. Works with **any** house picture. |
 | 🗣️ **Polish & English** | Follows your Home Assistant language. |

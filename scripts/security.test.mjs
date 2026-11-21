@@ -101,3 +101,11 @@ test("house image uses a plain src and a CSS url() only in the style", () => {
   assert.doesNotMatch(out, /src="url\(/);
   assert.ok(out.includes(`--img:url('${src}')`), "CSS variable keeps url()");
 });
+
+test("camera and card tiles get their own slots and safe card configs", () => {
+  const house = makeCard("house");
+  house.setConfig({ side_panels: { left: [{ camera: "camera.door", camera_view: "live", name: "Door" }, "sensor.temp", { card: { type: "calendar" } }, { card: "nope" }] } });
+  const html = house._sidePanel("left");
+  assert.equal((html.match(/class="side-card"/g) || []).length, 2);
+  assert.equal((html.match(/class="side-slot"/g) || []).length, 1);
+});

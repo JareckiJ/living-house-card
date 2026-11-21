@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 – Small tablets, cameras and cards in panels
+
+- Small landscape tablets (for example 7") keep the side panels next to the house. The card switches to a compact layout with narrower panels instead of moving them below.
+- Camera tiles: add a `camera.` entity to a side panel and choose a refreshed snapshot (lighter) or a live stream.
+- Any Home Assistant card in a side panel (`card:`), for example a calendar, buttons or a WebRTC/Frigate camera card.
+
 ## 0.5.4 – House image fix
 
 - The house image shows again. In 0.5.3 the image tag received the CSS form `url('…')` instead of the file path, so only the blurred background was visible.

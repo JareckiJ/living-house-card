@@ -1,8 +1,8 @@
-/*! Living House Card v0.5.4 | MIT License | https://github.com/krystianokris/living-house-card */
+/*! Living House Card v0.6.0 | MIT License | https://github.com/krystianokris/living-house-card */
 (() => {
 "use strict";
 /* ---------- Living House Card – shared helpers ---------- */
-const LHC_VERSION = "0.5.4";
+const LHC_VERSION = "0.6.0";
 const LHC_BAD = ["unknown", "unavailable", undefined, null, ""];
 const LHC_TV_ON = ["on", "playing", "paused", "buffering"];
 
@@ -11,6 +11,15 @@ const lhcEsc = (x) => String(x ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;",
 const lhcCssUrl = (value) => {
   const url = String(value ?? "").replace(/['\\\u0000-\u001f\u007f]/g, (char) => "\\" + char.charCodeAt(0).toString(16) + " ");
   return `url('${url}')`;
+};
+const lhcIsCard = (c) => !!c && typeof c === "object" && !Array.isArray(c) && typeof c.type === "string";
+/* Side-panel tile → Lovelace card config, or null for a plain entity row.
+   `camera:` is a shortcut for a picture-entity card; camera_view "live" streams, "auto" shows refreshed snapshots. */
+const lhcTileCard = (t) => {
+  if (lhcIsCard(t.card)) return t.card;
+  if (typeof t.camera !== "string") return null;
+  return { type: "picture-entity", entity: t.camera, camera_view: t.camera_view === "live" ? "live" : "auto",
+    show_name: !!t.name, ...(t.name ? { name: t.name } : {}), show_state: false };
 };
 const lhcArr = (x) => (x == null ? [] : Array.isArray(x) ? x : [x]);
 const lhcUniq = (a) => [...new Set(a.filter(Boolean))];
@@ -38,7 +47,7 @@ const LHC_I18N = {
     search: "Search", settings: "Settings",
     create_script: "Create HA script",
     tile_confirm: (name) => `Run the action for ${name}?`,
-    tile_error: "Could not run the tile action.",
+    tile_error: "Could not run the tile action.", card_error: "This card could not be loaded.",
     heat_off_confirm: (name) => `Turn off ${name}?`, heat_error: "Could not change the heating.", lower: "Lower", higher: "Higher",
     create_script_help: "Open the Home Assistant script editor. To add a button here, configure scenes on this card.",
     dn_auto: "Day/night: automatic", dn_day: "Forced day", dn_night: "Forced night",
@@ -118,7 +127,7 @@ const LHC_I18N = {
     search: "Szukaj", settings: "Ustawienia",
     create_script: "Utwórz skrypt HA",
     tile_confirm: (name) => `Wykonać akcję dla „${name}”?`,
-    tile_error: "Nie udało się wykonać akcji kafelka.",
+    tile_error: "Nie udało się wykonać akcji kafelka.", card_error: "Nie udało się wczytać tej karty.",
     heat_off_confirm: (name) => `Wyłączyć „${name}”?`, heat_error: "Nie udało się zmienić ogrzewania.", lower: "Mniej", higher: "Więcej",
     create_script_help: "Otwiera edytor skryptów Home Assistanta. Aby dodać tutaj przycisk, skonfiguruj scenes w karcie.",
     dn_auto: "Dzień/noc: automatycznie", dn_day: "Wymuszony dzień", dn_night: "Wymuszona noc",
@@ -343,6 +352,9 @@ function lhcApplyPreset(cfg, lang) {
  */
 const LHC_BASE_W = 1480;
 const LHC_BASE_H = 820;
+// Smaller canvas for small landscape tablets (e.g. 7"): narrower panels, so everything is scaled down less.
+const LHC_COMPACT_W = 1180;
+const LHC_COMPACT_H = 680;
 
 const LHC_DEFAULTS = {
   image: null,
@@ -405,6 +417,7 @@ class LivingHouseCard extends HTMLElement {
     this._raw = { ...LHC_DEFAULTS, ...config };
     this._cfg = lhcApplyPreset(this._raw, this._lang || lhcLang(this._hass, this._raw));
     this._normalize();
+    this._cards = null;
     this._room = null;
     const ls = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
     this._scene = ls("lhc-scene", "");
@@ -464,7 +477,7 @@ class LivingHouseCard extends HTMLElement {
     for (const side of ["left", "right", "heating"]) {
       this._sideEntities[side] = lhcArr(c.side_panels?.[side])
         .map((item) => typeof item === "string" ? { entity: item } : item)
-        .filter((item) => item && (typeof item.entity === "string" || item.tap_action?.action === "navigate"));
+        .filter((item) => item && (typeof item.entity === "string" || typeof item.camera === "string" || lhcIsCard(item.card) || item.tap_action?.action === "navigate"));
     }
     const e = c.energy || {};
     this._energy = typeof e === "string" ? { power: e } : e;
@@ -532,6 +545,7 @@ class LivingHouseCard extends HTMLElement {
     }
     if (!this._root || langChanged) this._build();
     else if (!old || this._changed(old, hass)) this._update();
+    if (this._cards) Object.values(this._cards).forEach((c) => { if (c.el) c.el.hass = hass; });
     const now = Date.now();
     if (this._energy.power && (!this._histAt || now - this._histAt > 5 * 60 * 1000)) {
       this._histAt = now;
@@ -584,11 +598,15 @@ class LivingHouseCard extends HTMLElement {
     const w = this.clientWidth || this.getBoundingClientRect().width;
     const top = Math.max(0, this.getBoundingClientRect().top + (window.scrollY || 0));
     const h = window.innerHeight - top;
-    const fit = this._cfg.fit && w >= 900 && h >= 420;
+    // Big screens always fit; smaller ones fit when they are landscape (a 7" tablet lying down).
+    const fit = !!this._cfg.fit && ((w >= 900 && h >= 420) || (w >= 600 && h >= 330 && w >= h * 1.15));
+    const zFull = Math.min(w / LHC_BASE_W, h / LHC_BASE_H);
+    const compact = fit && zFull < 0.8;
     outer.classList.toggle("fit", fit);
     outer.classList.toggle("fluid", !fit);
+    outer.classList.toggle("compact", compact);
     if (fit) {
-      const z = Math.min(w / LHC_BASE_W, h / LHC_BASE_H);
+      const z = compact ? Math.min(w / LHC_COMPACT_W, h / LHC_COMPACT_H) : zFull;
       outer.style.height = `${h}px`;
       outer.style.setProperty("--z", z.toFixed(4));
       requestAnimationFrame(() => this._fitStatus());
@@ -850,27 +868,66 @@ class LivingHouseCard extends HTMLElement {
   }
 
   _sidePanel(side) {
-    return this._sideEntities[side].length
-      ? `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}"></div>`
-      : "";
+    const items = this._sideEntities[side];
+    if (!items.length) return "";
+    // One slot per tile: entity rows are re-rendered, embedded cards stay mounted (a live camera keeps streaming).
+    const slots = items.map((item, i) => `<div class="${lhcTileCard(item) ? "side-card" : "side-slot"}" data-slot="${side}:${i}"></div>`).join("");
+    return `<div class="side-entities ${side === "heating" ? "" : "panel glass"}" id="entities-${side}">${slots}</div>`;
   }
 
   _renderSidePanels() {
     Object.entries(this._sideEntities).forEach(([side, items]) => {
       const el = this._el(`entities-${side}`);
       if (!el) return;
-      const html = items.map(({ entity, name, icon }, index) => {
+      items.forEach((item, index) => {
+        const slot = el.querySelector(`[data-slot="${side}:${index}"]`);
+        if (!slot) return;
+        const card = lhcTileCard(item);
+        if (card) return this._mountCard(slot, `${side}:${index}`, card);
+        const { entity, name, icon } = item;
         const state = this._s(entity);
         const value = this._hass.formatEntityState
           ? (state ? this._hass.formatEntityState(state) : "—")
           : (state ? [state.state, state.attributes.unit_of_measurement].filter(Boolean).join(" ") : "—");
-        return `<button type="button" class="side-entity" data-tile="${side}:${index}">
+        this._html(slot, `<button type="button" class="side-entity" data-tile="${side}:${index}">
           ${this._icon(icon || state?.attributes.icon || "mdi:information-outline")}
-          <span>${lhcEsc(this._name(entity, name) || items[index].tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
-        </button>`;
-      }).join("");
-      this._html(el, html);
+          <span>${lhcEsc(this._name(entity, name) || item.tap_action?.navigation_path)}</span>${entity ? `<strong>${lhcEsc(value)}</strong>` : ""}
+        </button>`);
+      });
     });
+  }
+
+  /* Any Lovelace card inside a side panel (calendar, buttons, camera …), created with HA's own card helpers. */
+  _mountCard(slot, key, config) {
+    this._cards = this._cards || {};
+    const entry = this._cards[key];
+    if (entry && entry.json === JSON.stringify(config)) {
+      if (entry.el) {
+        entry.el.hass = this._hass;
+        if (entry.el.parentNode !== slot) slot.replaceChildren(entry.el);
+      }
+      return;
+    }
+    const next = { json: JSON.stringify(config), el: null };
+    this._cards[key] = next;
+    (async () => {
+      let el;
+      try {
+        const helpers = window.loadCardHelpers ? await window.loadCardHelpers() : null;
+        if (!helpers) throw new Error("card helpers unavailable");
+        el = await helpers.createCardElement(config);
+      } catch (err) {
+        console.error("living-house-card side card", err);
+        el = document.createElement("div");
+        el.className = "card-error";
+        el.textContent = this._t("card_error");
+      }
+      if (this._cards[key] !== next) return;
+      next.el = el;
+      el.hass = this._hass;
+      const live = this._root && this._root.querySelector(`[data-slot="${key}"]`);
+      if (live) live.replaceChildren(el);
+    })();
   }
 
   _weather() {
@@ -1833,6 +1890,20 @@ ha-icon{--mdc-icon-size:20px;display:inline-flex}
 /* ---------- panele ---------- */
 .panel{border-radius:18px;padding:13px 16px;overflow:hidden}
 .outer.fit aside:has(.side-entities){overflow-y:auto}
+/* small landscape tablets: compact canvas */
+.outer.fit.compact .wrap{width:${LHC_COMPACT_W}px;height:${LHC_COMPACT_H}px;gap:10px;padding:10px 12px 12px;
+  grid-template-columns:232px minmax(0,1fr) 240px;grid-template-rows:52px minmax(0,1fr) 78px}
+.outer.fit.compact aside{overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(147,197,253,.35) transparent}
+.outer.fit.compact aside>.panel{flex-shrink:0}
+.outer.fit.compact .status,.outer.fit.compact .energy{flex:1 0 auto}
+.outer.fit.compact .scene{width:126px;height:74px}
+.outer.fit.compact .round{width:42px;height:42px}
+/* cards embedded in side panels */
+.side-card{margin:6px 0;border-radius:14px;overflow:hidden;
+  --ha-card-background:rgba(4,9,20,.35);--card-background-color:rgba(4,9,20,.35);--ha-card-box-shadow:none;
+  --ha-card-border-width:0;--ha-card-border-radius:14px;--primary-text-color:#e8eefc;--secondary-text-color:#9fb0cc}
+.side-card:first-child{margin-top:0}.side-card:last-child{margin-bottom:0}
+.card-error{padding:10px;font-size:12px;color:var(--dim)}
 .outer.fit aside:has(.side-entities)>.panel{flex-shrink:0}
 .outer.fit aside:has(.side-entities)>.status,.outer.fit aside:has(.side-entities)>.energy{flex:1 0 auto}
 .side-entity{display:flex;align-items:center;gap:8px;width:100%;min-height:42px;padding:4px 0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}
@@ -2279,6 +2350,7 @@ class LivingHouseCardEditor extends HTMLElement {
       name: pl ? "Nazwa" : "Name", icon: pl ? "Ikona" : "Icon",
       path: pl ? "Ścieżka widoku (opcjonalnie)" : "View path (optional)",
       service: pl ? "Akcja HA (opcjonalnie)" : "HA action (optional)",
+      view: pl ? "Kamera: obraz" : "Camera: picture",
     };
     form.schema = [
       { name: "side", selector: { select: { mode: "dropdown", options: [
@@ -2291,6 +2363,10 @@ class LivingHouseCardEditor extends HTMLElement {
       { name: "icon", selector: { icon: {} } },
       { name: "path", selector: { text: {} } },
       { name: "service", selector: { text: {} } },
+      { name: "view", selector: { select: { mode: "dropdown", options: [
+        { value: "auto", label: pl ? "Zdjęcie odświeżane (lżejsze)" : "Refreshed snapshot (lighter)" },
+        { value: "live", label: pl ? "Na żywo" : "Live stream" },
+      ] } } },
     ];
     form.computeLabel = (schema) => fields[schema.name];
     const button = document.createElement("button");
@@ -2315,8 +2391,14 @@ class LivingHouseCardEditor extends HTMLElement {
       const side = v.side || "left";
       const edit = this._tileEdit;
       const tile = { ...edit?.tile };
-      for (const key of ["entity", "name", "icon", "tap_action"]) delete tile[key];
+      for (const key of ["entity", "name", "icon", "tap_action", "camera", "camera_view"]) delete tile[key];
       for (const key of ["entity", "name", "icon"]) if (v[key]) tile[key] = v[key];
+      // A camera entity becomes a camera tile (picture on the panel).
+      if (v.entity && v.entity.startsWith("camera.") && !v.path && !v.service) {
+        delete tile.entity; delete tile.icon;
+        tile.camera = v.entity;
+        tile.camera_view = v.view === "live" ? "live" : "auto";
+      }
       if (v.path) tile.tap_action = { action: "navigate", navigation_path: v.path };
       if (v.service) {
         tile.tap_action = { action: "perform-action", perform_action: v.service };
@@ -2335,7 +2417,7 @@ class LivingHouseCardEditor extends HTMLElement {
     };
     this._editTile = (side, index, tile) => {
       this._tileEdit = tile ? { side, index, tile } : null;
-      form.data = tile ? { side, entity: tile.entity, name: tile.name, icon: tile.icon,
+      form.data = tile ? { side, entity: tile.entity || tile.camera, name: tile.name, icon: tile.icon, view: tile.camera_view,
         path: tile.tap_action?.navigation_path, service: tile.tap_action?.perform_action } : { side };
       button.textContent = tile ? saveLabel : addLabel;
       button.disabled = !valid(form.data);
@@ -2354,11 +2436,13 @@ class LivingHouseCardEditor extends HTMLElement {
         const tile = typeof raw === "string" ? { entity: raw } : raw;
         if (!tile) return;
         const row = document.createElement("p");
-        row.textContent = `${sections[index]} · ${tile.name || tile.entity || tile.tap_action?.navigation_path || "—"} `;
+        const what = tile.card ? `${pl ? "karta" : "card"} ${tile.card.type || ""}` : tile.camera ? `📷 ${tile.camera}` : "";
+        row.textContent = `${sections[index]} · ${tile.name || what || tile.entity || tile.tap_action?.navigation_path || "—"} `;
         const edit = document.createElement("button");
         edit.type = "button";
         edit.textContent = pl ? "Edytuj" : "Edit";
         edit.onclick = () => this._editTile(side, i, tile);
+        edit.hidden = !!tile.card; // cards are edited in YAML
         const remove = document.createElement("button");
         remove.type = "button";
         remove.textContent = pl ? "Usuń" : "Remove";
@@ -4192,5 +4276,5 @@ if (!customElements.get("living-cats-card")) {
 }
 
 
-console.info("%c LIVING-HOUSE-CARD %c v0.5.4 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
+console.info("%c LIVING-HOUSE-CARD %c v0.6.0 ", "background:#2563eb;color:#fff;border-radius:4px 0 0 4px", "background:#0f172a;color:#93c5fd;border-radius:0 4px 4px 0");
 })();

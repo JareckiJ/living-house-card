@@ -9,6 +9,15 @@ const lhcCssUrl = (value) => {
   const url = String(value ?? "").replace(/['\\\u0000-\u001f\u007f]/g, (char) => "\\" + char.charCodeAt(0).toString(16) + " ");
   return `url('${url}')`;
 };
+const lhcIsCard = (c) => !!c && typeof c === "object" && !Array.isArray(c) && typeof c.type === "string";
+/* Side-panel tile → Lovelace card config, or null for a plain entity row.
+   `camera:` is a shortcut for a picture-entity card; camera_view "live" streams, "auto" shows refreshed snapshots. */
+const lhcTileCard = (t) => {
+  if (lhcIsCard(t.card)) return t.card;
+  if (typeof t.camera !== "string") return null;
+  return { type: "picture-entity", entity: t.camera, camera_view: t.camera_view === "live" ? "live" : "auto",
+    show_name: !!t.name, ...(t.name ? { name: t.name } : {}), show_state: false };
+};
 const lhcArr = (x) => (x == null ? [] : Array.isArray(x) ? x : [x]);
 const lhcUniq = (a) => [...new Set(a.filter(Boolean))];
 
@@ -35,7 +44,7 @@ const LHC_I18N = {
     search: "Search", settings: "Settings",
     create_script: "Create HA script",
     tile_confirm: (name) => `Run the action for ${name}?`,
-    tile_error: "Could not run the tile action.",
+    tile_error: "Could not run the tile action.", card_error: "This card could not be loaded.",
     heat_off_confirm: (name) => `Turn off ${name}?`, heat_error: "Could not change the heating.", lower: "Lower", higher: "Higher",
     create_script_help: "Open the Home Assistant script editor. To add a button here, configure scenes on this card.",
     dn_auto: "Day/night: automatic", dn_day: "Forced day", dn_night: "Forced night",
@@ -115,7 +124,7 @@ const LHC_I18N = {
     search: "Szukaj", settings: "Ustawienia",
     create_script: "Utwórz skrypt HA",
     tile_confirm: (name) => `Wykonać akcję dla „${name}”?`,
-    tile_error: "Nie udało się wykonać akcji kafelka.",
+    tile_error: "Nie udało się wykonać akcji kafelka.", card_error: "Nie udało się wczytać tej karty.",
     heat_off_confirm: (name) => `Wyłączyć „${name}”?`, heat_error: "Nie udało się zmienić ogrzewania.", lower: "Mniej", higher: "Więcej",
     create_script_help: "Otwiera edytor skryptów Home Assistanta. Aby dodać tutaj przycisk, skonfiguruj scenes w karcie.",
     dn_auto: "Dzień/noc: automatycznie", dn_day: "Wymuszony dzień", dn_night: "Wymuszona noc",
